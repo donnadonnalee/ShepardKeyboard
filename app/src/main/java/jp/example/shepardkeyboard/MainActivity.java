@@ -74,8 +74,16 @@ public class MainActivity extends AppCompatActivity {
         params.modulationDepth = globalPrefs.getFloat("perf_mod_depth", 0.5f);
         params.modulationRate = globalPrefs.getFloat("perf_mod_rate", 5.0f);
         params.bufferSize = globalPrefs.getInt("perf_buffer_size", 512);
+        params.glideTime = globalPrefs.getFloat("perf_glide_time", 0.1f);
+        params.isGlideEnabled = globalPrefs.getBoolean("perf_glide_enabled", false);
+        params.fixedDuration = globalPrefs.getBoolean("perf_fixed_duration", false);
+        params.attackSec = globalPrefs.getFloat("env_attack", 0.05f);
+        params.decaySec = globalPrefs.getFloat("env_decay", 0.1f);
+        params.sustainLevel = globalPrefs.getFloat("env_sustain_level", 0.7f);
+        params.releaseSec = globalPrefs.getFloat("env_release", 0.5f);
 
         NativeAudioEngine.create(params.recordingMode);
+        NativeAudioEngine.setFixedDurationMode(params.fixedDuration);
         NativeAudioEngine.setBufferSize(params.bufferSize);
 
         tvTranspose = findViewById(R.id.tv_transpose);
@@ -86,16 +94,29 @@ public class MainActivity extends AppCompatActivity {
         setupRealTimeControls();
         setupKeyboard();
 
-        envelopeView.setOnEnvelopeChangeListener((attack, sustain, release) -> {
+        envelopeView.setOnEnvelopeChangeListener((attack, decay, sustainL, release) -> {
+            params.attackSec = attack;
+            params.decaySec = decay;
+            params.sustainLevel = sustainL;
+            params.releaseSec = release;
+            updateValueLabels();
             syncNativeParams();
         });
 
         SwitchMaterial swFixedDuration = findViewById(R.id.sw_fixed_duration);
+        swFixedDuration.setChecked(params.fixedDuration);
         swFixedDuration.setOnCheckedChangeListener((buttonView, isChecked) -> {
             params.fixedDuration = isChecked;
             NativeAudioEngine.setFixedDurationMode(isChecked);
             syncNativeParams();
             envelopeView.invalidate();
+        });
+
+        SwitchMaterial swGlide = findViewById(R.id.sw_glide);
+        swGlide.setChecked(params.isGlideEnabled);
+        swGlide.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            params.isGlideEnabled = isChecked;
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putBoolean("perf_glide_enabled", isChecked).apply();
         });
 
         findViewById(R.id.ib_settings).setOnClickListener(v -> showSettingsDialog());
@@ -110,28 +131,53 @@ public class MainActivity extends AppCompatActivity {
         });
 
         initDefaultPresets();
+        updateValueLabels();
         syncNativeParams();
+    }
+
+    private void updateValueLabels() {
+        TextView tvCenter = findViewById(R.id.tv_center_freq);
+        TextView tvSigmaLabel = findViewById(R.id.tv_sigma);
+        TextView tvEnv = findViewById(R.id.tv_env_values);
+
+        if (tvCenter != null)
+            tvCenter.setText(String.format("%.0fHz", params.centerFreq));
+        if (tvSigmaLabel != null)
+            tvSigmaLabel.setText(String.format("%.2f", params.sigma));
+        if (tvEnv != null) {
+            tvEnv.setText(String.format("A:%.2f D:%.2f S:%.2f R:%.2f",
+                    params.attackSec, params.decaySec, params.sustainLevel, params.releaseSec));
+        }
     }
 
     private void initDefaultPresets() {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        if (prefs.getAll().isEmpty()) {
-            // High frequency, sharp attack/release, short sustain
-            savePresetInternal("Twinkle", 0.01, 0.2, 0.2, 1200.0, 0.8);
-            // Low frequency, slow attack, long release, medium sustain
-            savePresetInternal("Moan", 0.5, 2.0, 1.0, 150.0, 1.2);
-            // Medium frequency, very sharp, very short sustain
-            savePresetInternal("Pulsar", 0.05, 0.1, 0.1, 440.0, 0.4);
-            // Wide spectrum, very slow attack, long sustain
-            savePresetInternal("Nebula", 1.5, 3.0, 2.0, 300.0, 2.5);
+        int presetVersion = prefs.getInt("preset_version", 0);
+
+        if (presetVersion < 1) {
+            // Standard: Balanced sound
+            savePresetInternal("Standard", 0.05, 0.1, 0.7, 0.5, 1.0, 600.0, 1.0);
+            // Twinkle: High frequency, sharp attack, short decay/release
+            savePresetInternal("Twinkle", 0.01, 0.5, 0.5, 0.4, 0.2, 2000.0, 1.5);
+            // Moan: Low frequency, slow attack, long release
+            savePresetInternal("Moan", 0.5, 0.5, 0.8, 2.0, 1.0, 150.0, 0.5);
+            // Pulsar: Medium frequency, very sharp, very short
+            savePresetInternal("Pulsar", 0, 0.05, 0.1, 0.1, 0.1, 440.0, 1.4);
+            // Nebula: Wide spectrum, very slow attack, long sustain/release
+            savePresetInternal("Nebula", 1.5, 2.0, 0.9, 3.0, 2.0, 300.0, 2.5);
+
+            prefs.edit().putInt("preset_version", 1).apply();
         }
     }
 
-    private void savePresetInternal(String name, double attack, double release, double duration, double center,
+    private void savePresetInternal(String name, double attack, double decay, double sustainL, double release,
+            double duration, double center,
             double sigma) {
         try {
             JSONObject json = new JSONObject();
             json.put("attack", attack);
+            json.put("decay", decay);
+            json.put("sustainLevel", sustainL);
             json.put("release", release);
             json.put("duration", duration);
             json.put("centerFreq", center);
@@ -198,11 +244,11 @@ public class MainActivity extends AppCompatActivity {
         View decorView = getWindow().getDecorView();
         decorView.setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                | View.SYSTEM_UI_FLAG_FULLSCREEN);
+                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_FULLSCREEN);
     }
 
     private void setupRealTimeControls() {
@@ -234,7 +280,8 @@ public class MainActivity extends AppCompatActivity {
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 // Scaling the lever (0-100) by the "Max" depth set in settings
                 double scaledDepth = (progress / 100.0) * params.modulationDepth;
-                NativeAudioEngine.setPerformanceParams(params.bendRange, params.bendSlewRate, scaledDepth, params.modulationRate);
+                NativeAudioEngine.setPerformanceParams(params.bendRange, params.bendSlewRate, scaledDepth,
+                        params.modulationRate, params.glideTime);
             }
 
             @Override
@@ -250,6 +297,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 params.centerFreq = progress;
+                updateValueLabels();
                 syncNativeParams();
                 envelopeView.invalidate();
             }
@@ -267,6 +315,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 params.sigma = Math.max(0.1, progress / 50.0);
+                updateValueLabels();
                 syncNativeParams();
                 envelopeView.invalidate();
             }
@@ -287,8 +336,10 @@ public class MainActivity extends AppCompatActivity {
 
     private void syncNativeParams() {
         double scaledModDepth = (seekModulation.getProgress() / 100.0) * params.modulationDepth;
-        NativeAudioEngine.setParams(params.attackSec, params.releaseSec, params.durationSec, params.centerFreq, params.sigma);
-        NativeAudioEngine.setPerformanceParams(params.bendRange, params.bendSlewRate, scaledModDepth, params.modulationRate);
+        NativeAudioEngine.setParams(params.attackSec, params.decaySec, params.sustainLevel, params.durationSec,
+                params.releaseSec, params.centerFreq, params.sigma);
+        NativeAudioEngine.setPerformanceParams(params.bendRange, params.bendSlewRate, scaledModDepth,
+                params.modulationRate, params.glideTime);
         NativeAudioEngine.setBufferSize(params.bufferSize);
     }
 
@@ -342,7 +393,8 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private void handleTouch(View container, int pointerId, float x, float y, List<View> blackKeys, List<View> whiteKeys, Map<View, Integer> viewToNote) {
+    private void handleTouch(View container, int pointerId, float x, float y, List<View> blackKeys,
+            List<View> whiteKeys, Map<View, Integer> viewToNote) {
         View targetKey = null;
 
         // Check black keys first (top layer)
@@ -374,16 +426,34 @@ public class MainActivity extends AppCompatActivity {
             volume = Math.max(0.01f, Math.min(1.0f, volume));
 
             if (lastNote == null || lastNote != transposedNote) {
-                // Update pointers first to correctly check if other fingers are holding the old note
-                activePointers.remove(pointerId);
-                if (lastNote != null && !activePointers.values().contains(lastNote)) {
-                    NativeAudioEngine.setNoteOff(lastNote);
+                if (lastNote != null) {
+                    // Update pointers first to correctly check if other fingers are holding the old
+                    // note
+                    activePointers.remove(pointerId);
+                    if (!activePointers.values().contains(lastNote)) {
+                        // If glide is enabled, we don't call setNoteOff, we call setNoteOnGlide for the
+                        // new note
+                        if (params.isGlideEnabled) {
+                            NativeAudioEngine.setNoteOnGlide(transposedNote, volume, lastNote);
+                        } else {
+                            NativeAudioEngine.setNoteOff(lastNote);
+                            NativeAudioEngine.setNoteOn(transposedNote, volume);
+                        }
+                    } else {
+                        // Old note still held by another finger, just start new note
+                        NativeAudioEngine.setNoteOn(transposedNote, volume);
+                    }
+                } else {
+                    // Fresh touch
+                    NativeAudioEngine.setNoteOn(transposedNote, volume);
                 }
-                NativeAudioEngine.setNoteOn(transposedNote, volume);
                 activePointers.put(pointerId, transposedNote);
                 updateKeyVisuals(viewToNote, activePointers.values());
             } else {
-                // Just update volume
+                // Just update volume if changed significantly to avoid jitter
+                // and redundant engine calls.
+                // Note: v.getTag() could store the last volume if we really wanted to optimize,
+                // but let's just do a simple check.
                 NativeAudioEngine.setNoteOn(transposedNote, volume);
             }
         } else {
@@ -406,7 +476,7 @@ public class MainActivity extends AppCompatActivity {
             View v = entry.getKey();
             int note = (entry.getValue() + transposeOffset + 12) % 12;
             boolean isBlack = getResources().getResourceEntryName(v.getId()).endsWith("s");
-            
+
             Drawable bg = v.getBackground();
             if (bg != null) {
                 if (currentlyPlaying.contains(note)) {
@@ -425,6 +495,7 @@ public class MainActivity extends AppCompatActivity {
     private void regenerateSounds() {
         // Redraw only, synthesis is real-time now
         envelopeView.setParams(params);
+        updateValueLabels();
         syncNativeParams();
     }
 
@@ -447,6 +518,8 @@ public class MainActivity extends AppCompatActivity {
         TextView labelModDepth = dialogView.findViewById(R.id.label_modulation_depth);
         TextView labelModRate = dialogView.findViewById(R.id.label_modulation_rate);
         TextView labelBufferSize = dialogView.findViewById(R.id.label_buffer_size);
+        TextView labelGlideTime = dialogView.findViewById(R.id.label_glide_time);
+        SeekBar seekGlideTime = dialogView.findViewById(R.id.seek_glide_time);
 
         View monoSwitch = dialogView.findViewById(R.id.switch_mono);
         if (monoSwitch != null)
@@ -463,8 +536,14 @@ public class MainActivity extends AppCompatActivity {
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 labelBendRange.setText(String.format("Pitch Bend Range: %.1f semitones", progress * 0.5));
             }
-            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
-            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
         });
 
         seekBendSlew.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -472,8 +551,14 @@ public class MainActivity extends AppCompatActivity {
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 labelBendSlew.setText(String.format("Pitch Bend Smoothing: %d%%", progress));
             }
-            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
-            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
         });
 
         seekModDepth.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -481,8 +566,14 @@ public class MainActivity extends AppCompatActivity {
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 labelModDepth.setText(String.format("Max Modulation Depth: %.1f semitones", progress / 10.0));
             }
-            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
-            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
         });
 
         seekModRate.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -490,11 +581,31 @@ public class MainActivity extends AppCompatActivity {
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 labelModRate.setText(String.format("Modulation Rate: %.1f Hz", progress / 10.0));
             }
-            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
-            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
         });
 
         seekBufferSize.setOnSeekBarChangeListener(createSeekListener(labelBufferSize, "Buffer Size (Frames): %d"));
+        seekGlideTime.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                labelGlideTime.setText(String.format("Glide Time (ms): %d", progress));
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
+        });
 
         // Set initial progress
         seekBendRange.setProgress((int) (params.bendRange * 2));
@@ -502,10 +613,11 @@ public class MainActivity extends AppCompatActivity {
         seekModDepth.setProgress((int) (params.modulationDepth * 10));
         seekModRate.setProgress((int) (params.modulationRate * 10));
         seekBufferSize.setProgress(params.bufferSize);
-        
+        seekGlideTime.setProgress((int) (params.glideTime * 1000));
+
         // Update labels initially
         labelBendRange.setText(String.format("Pitch Bend Range: %.1f semitones", params.bendRange));
-        labelBendSlew.setText(String.format("Pitch Bend Smoothing: %d%%", (int)(params.bendSlewRate * 100)));
+        labelBendSlew.setText(String.format("Pitch Bend Smoothing: %d%%", (int) (params.bendSlewRate * 100)));
         labelModDepth.setText(String.format("Max Modulation Depth: %.1f semitones", params.modulationDepth));
         labelModRate.setText(String.format("Modulation Rate: %.1f Hz", params.modulationRate));
         labelBufferSize.setText(String.format("Buffer Size (Frames): %d", params.bufferSize));
@@ -520,6 +632,7 @@ public class MainActivity extends AppCompatActivity {
             params.modulationDepth = seekModDepth.getProgress() / 10.0;
             params.modulationRate = seekModRate.getProgress() / 10.0;
             params.bufferSize = Math.max(64, seekBufferSize.getProgress());
+            params.glideTime = seekGlideTime.getProgress() / 1000.0;
             params.recordingMode = swRecording.isChecked();
 
             NativeAudioEngine.setRecordingMode(params.recordingMode);
@@ -530,8 +643,14 @@ public class MainActivity extends AppCompatActivity {
                     .putFloat("perf_mod_depth", (float) params.modulationDepth)
                     .putFloat("perf_mod_rate", (float) params.modulationRate)
                     .putInt("perf_buffer_size", params.bufferSize)
+                    .putFloat("perf_glide_time", (float) params.glideTime)
+                    .putBoolean("perf_fixed_duration", params.fixedDuration)
+                    .putFloat("env_attack", (float) params.attackSec)
+                    .putFloat("env_decay", (float) params.decaySec)
+                    .putFloat("env_sustain_level", (float) params.sustainLevel)
+                    .putFloat("env_release", (float) params.releaseSec)
                     .apply();
-            
+
             syncNativeParams();
             dialog.dismiss();
         });
@@ -576,6 +695,8 @@ public class MainActivity extends AppCompatActivity {
         try {
             JSONObject json = new JSONObject();
             json.put("attack", params.attackSec);
+            json.put("decay", params.decaySec);
+            json.put("sustainLevel", params.sustainLevel);
             json.put("release", params.releaseSec);
             json.put("duration", params.durationSec);
             json.put("centerFreq", params.centerFreq);
@@ -595,7 +716,14 @@ public class MainActivity extends AppCompatActivity {
     private void showLoadPresetDialog() {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         Map<String, ?> allEntries = prefs.getAll();
-        final List<String> names = new ArrayList<>(allEntries.keySet());
+        final List<String> names = new ArrayList<>();
+        
+        for (Map.Entry<String, ?> entry : allEntries.entrySet()) {
+            Object val = entry.getValue();
+            if (val instanceof String && ((String) val).trim().startsWith("{")) {
+                names.add(entry.getKey());
+            }
+        }
 
         if (names.isEmpty()) {
             Toast.makeText(this, "No presets found", Toast.LENGTH_SHORT).show();
@@ -618,12 +746,20 @@ public class MainActivity extends AppCompatActivity {
             try {
                 JSONObject json = new JSONObject(jsonStr);
                 params.attackSec = json.optDouble("attack", 0.05);
+                params.decaySec = json.optDouble("decay", 0.1);
+                params.sustainLevel = json.optDouble("sustainLevel", 0.7);
                 params.releaseSec = json.optDouble("release", 0.5);
                 params.durationSec = json.optDouble("duration", 1.0);
                 params.centerFreq = json.optDouble("centerFreq", 600.0);
                 params.sigma = json.optDouble("sigma", 1.0);
                 params.gain = json.optDouble("gain", 0.8);
                 params.bufferSize = json.optInt("bufferSize", 256);
+
+                // Sync UI SeekBars
+                if (seekCenterFreq != null)
+                    seekCenterFreq.setProgress((int) params.centerFreq);
+                if (seekSigma != null)
+                    seekSigma.setProgress((int) (params.sigma * 50.0));
 
                 Toast.makeText(this, "Loaded '" + name + "'", Toast.LENGTH_SHORT).show();
                 regenerateSounds();

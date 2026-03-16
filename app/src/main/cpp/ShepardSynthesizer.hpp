@@ -5,14 +5,12 @@
 #include <cmath>
 #include <mutex>
 
-struct Voice {
-    bool active = false;
-    double phase = 0.0;
-    double envelope = 0.0;
-    float volume = 1.0f;
-    int noteIndex = 0;
-    double timerSec = 0.0; // Tracks elapsed time since noteOn
-    bool autoReleased = false; // True if fixed duration exceeded
+enum class EnvStage {
+    IDLE,
+    ATTACK,
+    DECAY,
+    SUSTAIN,
+    RELEASE
 };
 
 class ShepardSynthesizer {
@@ -22,27 +20,50 @@ public:
     void noteOn(int noteIndex, float volume);
     void noteOff(int noteIndex);
     void allNotesOff();
-    void setParams(double attack, double release, double sustain, double centerFreq, double sigma);
-    void setPerformanceParams(double bendRange, double bendSlewRate, double modDepth, double modRate);
+    void setParams(double attack, double decay, double sustainLevel, double sustainDuration, double release, double centerFreq, double sigma);
+    void setPerformanceParams(double bendRange, double bendSlewRate, double modDepth, double modRate, double glideTime);
     void setModulation(double depth, double rate);
     void setPitchBend(float bend); // -1.0 to 1.0
     void setFixedDurationMode(bool enabled);
+    
+    // Updated noteOn to support slides
+    void noteOn(int noteIndex, float volume, bool slideFromOld = false, int oldNoteIndex = -1);
 
 private:
+    struct Voice {
+        bool active = false;
+        double phase = 0.0;
+        double envelope = 0.0;
+        float volume = 1.0f;
+        int noteIndex = 0;
+        double timerSec = 0.0;
+        bool autoReleased = false;
+        
+        bool isGliding = false;
+        double glideStartFreq = 0.0;
+        double glideTargetFreq = 0.0;
+        double glideTimer = 0.0;
+
+        EnvStage stage = EnvStage::IDLE;
+    };
+    
     std::vector<Voice> voices;
     std::mutex voiceMutex;
 
     double attackSec = 0.05;
+    double decaySec = 0.1;
+    double sustainLevel = 0.7;
     double releaseSec = 0.5;
-    double sustainSec = 0.2; // Only used in fixedDurationMode
+    double fixedSustainSec = 0.2; 
     bool fixedDurationMode = false;
     double centerFreq = 440.0;
     double sigma = 1.0;
     
-    float targetPitchBend = 0.0f; // in -1.0 to 1.0
-    float currentPitchBend = 0.0f; // smoothed
-    double bendRange = 2.0;       // in semitones
-    double bendSlewRate = 0.95;   // 0.0 to 1.0 (higher = slower)
+    float targetPitchBend = 0.0f; 
+    float currentPitchBend = 0.0f; 
+    double bendRange = 2.0;       
+    double bendSlewRate = 0.95;   
+    double glideSeconds = 0.1;
     
     double lfoPhase = 0.0;
     double modDepth = 0.0; // in semitones

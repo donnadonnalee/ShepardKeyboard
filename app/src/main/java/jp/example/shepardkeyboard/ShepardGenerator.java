@@ -15,6 +15,8 @@ public class ShepardGenerator {
 
     public static class Params {
         public double attackSec = 0.05;
+        public double decaySec = 0.1;
+        public double sustainLevel = 0.7;
         public double releaseSec = 0.5;
         public double durationSec = 1.0;
         public double centerFreq = 600.0;
@@ -27,6 +29,8 @@ public class ShepardGenerator {
         public boolean recordingMode = false;
         public double bendRange = 12.0; // semitones (octave by default)
         public double bendSlewRate = 0.95; // 0.0 to 1.0 (higher = slower)
+        public double glideTime = 0.1; // seconds
+        public boolean isGlideEnabled = false;
     }
 
     public static byte[] generateNote(double frequency, Params params, ProgressListener listener) {
@@ -65,11 +69,17 @@ public class ShepardGenerator {
             double envelope = 0;
             if (t < attack) {
                 envelope = (attack > 0) ? t / attack : 1.0;
-            } else if (t < attack + sustain) {
-                envelope = 1.0;
+            } else if (t < attack + params.decaySec) {
+                double decayT = t - attack;
+                envelope = (params.decaySec > 0) ? 1.0 - (decayT / params.decaySec) * (1.0 - params.sustainLevel) : params.sustainLevel;
+            } else if (params.fixedDuration && t < attack + params.decaySec + sustain) {
+                envelope = params.sustainLevel;
+            } else if (!params.fixedDuration) {
+                envelope = params.sustainLevel;
             } else {
-                double releaseT = t - (attack + sustain);
-                envelope = (release > 0) ? Math.max(0, 1.0 - (releaseT / release)) : 0;
+                double releaseStart = attack + params.decaySec + sustain;
+                double releaseT = t - releaseStart;
+                envelope = (release > 0) ? Math.max(0, params.sustainLevel - (releaseT / release) * params.sustainLevel) : 0;
             }
 
             double finalSample = sample * envelope;

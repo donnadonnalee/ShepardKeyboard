@@ -52,11 +52,11 @@ public:
         return oboe::DataCallbackResult::Continue;
     }
 
-    void noteOn(int index, float vol) { synth->noteOn(index, vol); }
+    void noteOn(int index, float vol, bool slide = false, int oldIdx = -1) { synth->noteOn(index, vol, slide, oldIdx); }
     void noteOff(int index) { synth->noteOff(index); }
     void allNotesOff() { synth->allNotesOff(); }
-    void setParams(double a, double r, double sus, double cf, double s) { synth->setParams(a, r, sus, cf, s); }
-    void setPerformanceParams(double br, double bs, double md, double mr) { synth->setPerformanceParams(br, bs, md, mr); }
+    void setParams(double a, double d, double sl, double sd, double r, double cf, double s) { synth->setParams(a, d, sl, sd, r, cf, s); }
+    void setPerformanceParams(double br, double bs, double md, double mr, double gt) { synth->setPerformanceParams(br, bs, md, mr, gt); }
     void setModulation(double d, double r) { synth->setModulation(d, r); }
     void setPitchBend(float b) { synth->setPitchBend(b); }
     void setFixedDurationMode(bool enabled) { synth->setFixedDurationMode(enabled); }
@@ -107,6 +107,11 @@ Java_jp_example_shepardkeyboard_NativeAudioEngine_setNoteOn(JNIEnv *env, jclass 
 }
 
 JNIEXPORT void JNICALL
+Java_jp_example_shepardkeyboard_NativeAudioEngine_setNoteOnGlide(JNIEnv *env, jclass clazz, jint note_index, jfloat volume, jint old_note_index) {
+    if (engine) engine->noteOn(note_index, volume, true, old_note_index);
+}
+
+JNIEXPORT void JNICALL
 Java_jp_example_shepardkeyboard_NativeAudioEngine_setNoteOff(JNIEnv *env, jclass clazz, jint note_index) {
     if (engine) engine->noteOff(note_index);
 }
@@ -117,13 +122,13 @@ Java_jp_example_shepardkeyboard_NativeAudioEngine_setAllNotesOff(JNIEnv *env, jc
 }
 
 JNIEXPORT void JNICALL
-Java_jp_example_shepardkeyboard_NativeAudioEngine_setParams(JNIEnv *env, jclass clazz, jdouble attack, jdouble release, jdouble sustain, jdouble center_freq, jdouble sigma) {
-    if (engine) engine->setParams(attack, release, sustain, center_freq, sigma);
+Java_jp_example_shepardkeyboard_NativeAudioEngine_setParams(JNIEnv *env, jclass clazz, jdouble attack, jdouble decay, jdouble sustain_level, jdouble sustain_duration, jdouble release, jdouble center_freq, jdouble sigma) {
+    if (engine) engine->setParams(attack, decay, sustain_level, sustain_duration, release, center_freq, sigma);
 }
 
 JNIEXPORT void JNICALL
-Java_jp_example_shepardkeyboard_NativeAudioEngine_setPerformanceParams(JNIEnv *env, jclass clazz, jdouble bend_range, jdouble bend_slew, jdouble mod_depth, jdouble mod_rate) {
-    if (engine) engine->setPerformanceParams(bend_range, bend_slew, mod_depth, mod_rate);
+Java_jp_example_shepardkeyboard_NativeAudioEngine_setPerformanceParams(JNIEnv *env, jclass clazz, jdouble bend_range, jdouble bend_slew, jdouble mod_depth, jdouble mod_rate, jdouble glide_time) {
+    if (engine) engine->setPerformanceParams(bend_range, bend_slew, mod_depth, mod_rate, glide_time);
 }
 
 JNIEXPORT void JNICALL

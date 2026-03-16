@@ -1,6 +1,11 @@
 #include "ShepardSynthesizer.hpp"
 #include <algorithm>
 
+static const double baseFreqs[] = {
+    261.63, 277.18, 293.66, 311.13, 329.63, 349.23,
+    369.99, 392.00, 415.30, 440.00, 466.16, 493.88
+};
+
 ShepardSynthesizer::ShepardSynthesizer() {
     voices.resize(12);
     for (int i = 0; i < 12; ++i) {
@@ -10,11 +15,6 @@ ShepardSynthesizer::ShepardSynthesizer() {
 
 void ShepardSynthesizer::process(float* output, int numFrames) {
     std::lock_guard<std::mutex> lock(voiceMutex);
-
-    double baseFreqs[] = {
-        261.63, 277.18, 293.66, 311.13, 329.63, 349.23,
-        369.99, 392.00, 415.30, 440.00, 466.16, 493.88
-    };
 
     for (int i = 0; i < numFrames; ++i) {
         float sample = 0;
@@ -37,35 +37,65 @@ void ShepardSynthesizer::process(float* output, int numFrames) {
             // Timer and auto-release logic
             if (v.active) {
                 v.timerSec += 1.0 / kSampleRate;
-                if (fixedDurationMode && !v.autoReleased) {
-                    if (v.timerSec >= (attackSec + sustainSec)) {
-                        v.autoReleased = true;
-                    }
-                }
             }
-
-            // Envelope logic
-            bool effectivelyActive = v.active && !v.autoReleased;
-            if (effectivelyActive) {
+            // ADSR Envelope logic
+            if (v.stage == EnvStage::ATTACK) {
                 if (attackSec > 0) {
                     v.envelope += 1.0 / (attackSec * kSampleRate);
                 } else {
                     v.envelope = 1.0;
                 }
-                if (v.envelope > 1.0) v.envelope = 1.0;
-            } else {
+                if (v.envelope >= 1.0) {
+                    v.envelope = 1.0;
+                    v.stage = EnvStage::DECAY;
+                }
+            } else if (v.stage == EnvStage::DECAY) {
+                if (decaySec > 0) {
+                    v.envelope -= (1.0 - sustainLevel) / (decaySec * kSampleRate);
+                    if (v.envelope <= sustainLevel) {
+                        v.envelope = sustainLevel;
+                        v.stage = EnvStage::SUSTAIN;
+                    }
+                } else {
+                    v.envelope = sustainLevel;
+                    v.stage = EnvStage::SUSTAIN;
+                }
+            } else if (v.stage == EnvStage::SUSTAIN) {
+                v.envelope = sustainLevel;
+                // Auto-trigger release if in fixed duration mode
+                if (fixedDurationMode && v.timerSec >= (attackSec + decaySec + fixedSustainSec)) {
+                    v.stage = EnvStage::RELEASE;
+                    v.autoReleased = true;
+                }
+            } else if (v.stage == EnvStage::RELEASE) {
                 if (releaseSec > 0) {
-                    v.envelope -= 1.0 / (releaseSec * kSampleRate);
+                    v.envelope -= sustainLevel / (releaseSec * kSampleRate);
                 } else {
                     v.envelope = 0;
                 }
-                if (v.envelope < 0) v.envelope = 0;
+                if (v.envelope <= 0) {
+                    v.envelope = 0;
+                    v.stage = EnvStage::IDLE;
+                }
             }
 
             // Frequency for the specific note + pitch bend + LFO modulation
-            double baseFreq = baseFreqs[v.noteIndex];
+            double targetBaseFreq = baseFreqs[v.noteIndex];
+            double currentBaseFreq = targetBaseFreq;
+
+            if (v.isGliding && glideSeconds > 0) {
+                double t = v.glideTimer / glideSeconds;
+                if (t >= 1.0) {
+                    v.isGliding = false;
+                } else {
+                    // Linear interpolation in log space (ideal for pitch)
+                    currentBaseFreq = v.glideStartFreq * std::pow(v.glideTargetFreq / v.glideStartFreq, t);
+                    v.glideTimer += 1.0 / kSampleRate;
+                }
+            }
+
             double pitchBendFactor = std::pow(2.0, (currentPitchBend * bendRange + lfoVal) / 12.0);
-            double currentFreq = baseFreq * pitchBendFactor;
+            double currentFreq = currentBaseFreq * pitchBendFactor;
             
             // Shepard calculation: Sum octaves until outside audible range.
             // Using a while loop ensuring we cover the same absolute frequencies 
@@ -100,36 +130,82 @@ void ShepardSynthesizer::process(float* output, int numFrames) {
     }
 }
 
-void ShepardSynthesizer::noteOn(int noteIndex, float volume) {
+void ShepardSynthesizer::noteOn(int noteIndex, float volume, bool slideFromOld, int oldNoteIndex) {
     std::lock_guard<std::mutex> lock(voiceMutex);
+    if (noteIndex < 0 || noteIndex >= 12) return;
+
+    if (slideFromOld && oldNoteIndex >= 0 && oldNoteIndex < 12 && voices[oldNoteIndex].active) {
+        // Glide logic: Move state from old voice to new one
+        Voice& oldV = voices[oldNoteIndex];
+        Voice& newV = voices[noteIndex];
+
+        // Only move if the new note is NOT already playing as a primary note
+        if (!newV.active) {
+            newV.active = true;
+            newV.phase = oldV.phase;
+            // inherits envelope/timer from old voice
+            newV.stage = oldV.stage; 
+            if (newV.stage == EnvStage::IDLE) newV.stage = EnvStage::ATTACK;
+            
+            newV.isGliding = true;
+            newV.glideStartFreq = baseFreqs[oldNoteIndex];
+            newV.glideTargetFreq = baseFreqs[noteIndex];
+            newV.glideTimer = 0.0;
+            
+            // Turn off old voice immediately and silence its envelope
+            // to prevent the release tail from overlapping with the glide.
+            oldV.active = false;
+            oldV.envelope = 0;
+            oldV.stage = EnvStage::IDLE;
+            return;
+        }
+    }
+
     // Only reset phase and timer if the note was not already active (new key press).
-    // If active is true, it's a volume update from ACTION_MOVE on the same key.
     if (!voices[noteIndex].active) {
         if (voices[noteIndex].envelope <= 0) {
             voices[noteIndex].phase = 0;
         }
         voices[noteIndex].timerSec = 0;
         voices[noteIndex].autoReleased = false;
+        voices[noteIndex].isGliding = false;
+        voices[noteIndex].stage = EnvStage::ATTACK;
     }
     voices[noteIndex].active = true;
     voices[noteIndex].volume = volume;
+    // Ensure stage is ATTACK if re-triggered, but prevent re-triggering 
+    // if we are just updating volume for an already-autorelased note in fixed mode.
+    if (voices[noteIndex].stage == EnvStage::RELEASE || voices[noteIndex].stage == EnvStage::IDLE) {
+        if (!fixedDurationMode || !voices[noteIndex].autoReleased) {
+            voices[noteIndex].stage = EnvStage::ATTACK;
+            voices[noteIndex].autoReleased = false; 
+        }
+    }
 }
 
 void ShepardSynthesizer::noteOff(int noteIndex) {
     std::lock_guard<std::mutex> lock(voiceMutex);
     voices[noteIndex].active = false;
+    if (voices[noteIndex].stage != EnvStage::IDLE) {
+        voices[noteIndex].stage = EnvStage::RELEASE;
+    }
 }
 
 void ShepardSynthesizer::allNotesOff() {
     std::lock_guard<std::mutex> lock(voiceMutex);
-    for (auto& v : voices) v.active = false;
+    for (auto& v : voices) {
+        v.active = false;
+        if (v.stage != EnvStage::IDLE) v.stage = EnvStage::RELEASE;
+    }
 }
 
-void ShepardSynthesizer::setParams(double attack, double release, double sustain, double cf, double s) {
+void ShepardSynthesizer::setParams(double attack, double decay, double sustainL, double sustainDur, double release, double cf, double s) {
     std::lock_guard<std::mutex> lock(voiceMutex);
     attackSec = attack;
+    decaySec = decay;
+    sustainLevel = sustainL;
+    fixedSustainSec = sustainDur;
     releaseSec = release;
-    sustainSec = sustain;
     centerFreq = cf;
     sigma = s;
 }
@@ -145,12 +221,13 @@ void ShepardSynthesizer::setPitchBend(float bend) {
     targetPitchBend = bend;
 }
 
-void ShepardSynthesizer::setPerformanceParams(double br, double bs, double md, double mr) {
+void ShepardSynthesizer::setPerformanceParams(double br, double bs, double md, double mr, double gt) {
     std::lock_guard<std::mutex> lock(voiceMutex);
     bendRange = br;
     bendSlewRate = bs;
     modDepth = md;
     modRate = mr;
+    glideSeconds = gt;
 }
 
 void ShepardSynthesizer::setFixedDurationMode(bool enabled) {

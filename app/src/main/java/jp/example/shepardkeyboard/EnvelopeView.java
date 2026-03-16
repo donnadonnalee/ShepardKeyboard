@@ -22,11 +22,11 @@ public class EnvelopeView extends View {
     private ShepardGenerator.Params params;
 
     public interface OnEnvelopeChangeListener {
-        void onEnvelopeChanged(double attack, double sustain, double release);
+        void onEnvelopeChanged(double attack, double decay, double sustainL, double release);
     }
 
     private OnEnvelopeChangeListener listener;
-    private int draggingPoint = -1; // 0: Attack, 1: SustainEnd, 2: ReleaseEnd
+    private int draggingPoint = -1; // 0: Attack, 1: Decay, 2: Sustain, 3: Release
 
     private static final double MAX_TOTAL_TIME = 5.0; // Total time shown in Fixed Duration mode
     private static final float SUSTAIN_WAVE_WIDTH = 60f; // Fixed symbolic width for sustain "}}"
@@ -64,51 +64,63 @@ public class EnvelopeView extends View {
         int h = getHeight();
         float padding = 15f;
         float graphW = w - 2 * padding;
+        float graphH = h - 2 * padding;
+        // ADSR Coordinate calculations
+        float xA, xD, xS, xR, yS;
+        xA = padding + (float) (params.attackSec / MAX_TOTAL_TIME * graphW);
+        xD = xA + (float) (params.decaySec / MAX_TOTAL_TIME * graphW);
+        yS = h - padding - (float) (params.sustainLevel * graphH);
 
-        // Coordinate calculations for hit testing
-        float xA, xS, xR, yR;
         if (params.fixedDuration) {
-            xA = padding + (float) (params.attackSec / MAX_TOTAL_TIME * graphW);
-            xS = xA + (float) (params.durationSec / MAX_TOTAL_TIME * graphW);
+            xS = xD + (float) (params.durationSec / MAX_TOTAL_TIME * graphW);
             xR = xS + (float) (params.releaseSec / MAX_TOTAL_TIME * graphW);
-            xR = Math.min(xR, padding + graphW);
         } else {
             // Symbolic mode
-            xA = padding + (float) (params.attackSec / MAX_TOTAL_TIME * graphW);
-            xS = xA + SUSTAIN_WAVE_WIDTH;
+            xS = xD + SUSTAIN_WAVE_WIDTH;
             xR = xS + (float) (params.releaseSec / MAX_TOTAL_TIME * graphW);
-            xR = Math.min(xR, padding + graphW);
         }
+        xR = Math.min(xR, padding + graphW);
 
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
                 if (dist(x, y, xA, padding) < 60) {
-                    draggingPoint = 0;
+                    draggingPoint = 0; // Attack
                     return true;
-                } else if (params.fixedDuration && dist(x, y, xS, padding) < 60) {
-                    draggingPoint = 1;
+                } else if (dist(x, y, xD, yS) < 60) {
+                    draggingPoint = 1; // Decay / SustainLevel
+                    return true;
+                } else if (params.fixedDuration && dist(x, y, xS, yS) < 60) {
+                    draggingPoint = 2; // Sustain period (Fixed mode)
                     return true;
                 } else if (dist(x, y, xR, h - padding) < 60) {
-                    draggingPoint = 2;
+                    draggingPoint = 3; // Release
                     return true;
                 }
                 break;
             case MotionEvent.ACTION_MOVE:
                 if (draggingPoint == 0) {
-                    float limitX = params.fixedDuration ? xS - 10 : padding + graphW - SUSTAIN_WAVE_WIDTH - 20;
+                    float limitX = xD - 10;
                     float newX = Math.max(padding, Math.min(x, limitX));
                     params.attackSec = ((newX - padding) / graphW) * MAX_TOTAL_TIME;
-                } else if (draggingPoint == 1 && params.fixedDuration) {
-                    float newX = Math.max(xA + 10, Math.min(x, xR - 10));
-                    params.durationSec = ((newX - xA) / graphW) * MAX_TOTAL_TIME;
-                } else if (draggingPoint == 2) {
+                } else if (draggingPoint == 1) {
+                    // Decay X
+                    float limitX = params.fixedDuration ? xS - 10 : padding + graphW - SUSTAIN_WAVE_WIDTH - 20;
+                    float newX = Math.max(xA + 10, Math.min(x, limitX));
+                    params.decaySec = ((newX - xA) / graphW) * MAX_TOTAL_TIME;
+                    // Sustain Y
+                    float newY = Math.max(padding, Math.min(y, h - padding));
+                    params.sustainLevel = (h - padding - newY) / graphH;
+                } else if (draggingPoint == 2 && params.fixedDuration) {
+                    float newX = Math.max(xD + 10, Math.min(x, xR - 10));
+                    params.durationSec = ((newX - xD) / graphW) * MAX_TOTAL_TIME;
+                } else if (draggingPoint == 3) {
                     float minX = xS + 5;
                     float newX = Math.max(minX, Math.min(x, padding + graphW));
                     params.releaseSec = ((newX - xS) / graphW) * MAX_TOTAL_TIME;
                 }
                 
                 if (draggingPoint != -1) {
-                    if (listener != null) listener.onEnvelopeChanged(params.attackSec, params.durationSec, params.releaseSec);
+                    if (listener != null) listener.onEnvelopeChanged(params.attackSec, params.decaySec, params.sustainLevel, params.releaseSec);
                     invalidate();
                     return true;
                 }
@@ -136,15 +148,17 @@ public class EnvelopeView extends View {
         float graphW = w - 2 * padding;
         float graphH = h - 2 * padding;
 
-        float xA, xS, xR;
+        float xA, xD, xS, xR, yS;
+        xA = padding + (float) (params.attackSec / MAX_TOTAL_TIME * graphW);
+        xD = xA + (float) (params.decaySec / MAX_TOTAL_TIME * graphW);
+        yS = h - padding - (float) (params.sustainLevel * graphH);
+
         if (params.fixedDuration) {
-            xA = padding + (float) (params.attackSec / MAX_TOTAL_TIME * graphW);
-            xS = xA + (float) (params.durationSec / MAX_TOTAL_TIME * graphW);
+            xS = xD + (float) (params.durationSec / MAX_TOTAL_TIME * graphW);
             xR = xS + (float) (params.releaseSec / MAX_TOTAL_TIME * graphW);
         } else {
             // Symbolic mode: /}}\
-            xA = padding + (float) (params.attackSec / MAX_TOTAL_TIME * graphW);
-            xS = xA + SUSTAIN_WAVE_WIDTH;
+            xS = xD + SUSTAIN_WAVE_WIDTH;
             xR = xS + (float) (params.releaseSec / MAX_TOTAL_TIME * graphW);
         }
         float xR_vis = Math.min(xR, padding + graphW);
@@ -152,19 +166,16 @@ public class EnvelopeView extends View {
         path.reset();
         path.moveTo(padding, h - padding);
         path.lineTo(xA, padding);
+        path.lineTo(xD, yS);
         
         if (params.fixedDuration) {
-            path.lineTo(xS, padding);
+            path.lineTo(xS, yS);
             path.lineTo(xR_vis, h - padding);
         } else {
             // Symbolic sustain wave "}}"
-            drawWaveline(path, xA, padding, xS, padding, 15, 6);
-            path.lineTo(xS, padding);
+            drawWaveline(path, xD, yS, xS, yS, 15, 6);
+            path.lineTo(xS, yS);
             path.lineTo(xR_vis, h - padding);
-            // Optionally close the plateau for visualization if release is short
-            if (xR_vis < padding + graphW) {
-                // path.lineTo(padding + graphW, h - padding);
-            }
         }
         
         path.lineTo(padding, h - padding);
@@ -177,9 +188,10 @@ public class EnvelopeView extends View {
         Paint hPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         hPaint.setColor(Color.YELLOW);
         canvas.drawCircle(xA, padding, 10f, hPaint);
+        canvas.drawCircle(xD, yS, 10f, hPaint);
         
         if (params.fixedDuration) {
-            canvas.drawCircle(xS, padding, 10f, hPaint);
+            canvas.drawCircle(xS, yS, 10f, hPaint);
         }
         
         canvas.drawCircle(xR_vis, h - padding, 10f, hPaint);
@@ -189,6 +201,7 @@ public class EnvelopeView extends View {
         tPaint.setColor(Color.GRAY);
         tPaint.setTextSize(20f);
         canvas.drawText("A", xA - 5, h - 5, tPaint);
+        canvas.drawText("D", xD - 5, h - 5, tPaint);
         if (params.fixedDuration) {
             canvas.drawText("S", xS - 5, h - 5, tPaint);
         }
