@@ -24,6 +24,13 @@ void ShepardSynthesizer::process(float* output, int numFrames) {
         lfoPhase += (kTwoPi * modRate) / kSampleRate;
         if (lfoPhase > kTwoPi) lfoPhase -= kTwoPi;
 
+        // Pitch bend smoothing (Slew rate limited)
+        // Use a power function to make the high-end of smoothing MUCH more gradual
+        float diff = targetPitchBend - currentPitchBend;
+        float coeff = std::pow(0.1f, (float)bendSlewRate * 5.0f); // coefficient gets very small
+        if (bendSlewRate <= 0.05) coeff = 1.0f; // almost instant at low settings
+        currentPitchBend += diff * coeff;
+
         for (auto& v : voices) {
             if (!v.active && v.envelope <= 0) continue;
 
@@ -57,8 +64,7 @@ void ShepardSynthesizer::process(float* output, int numFrames) {
 
             // Frequency for the specific note + pitch bend + LFO modulation
             double baseFreq = baseFreqs[v.noteIndex];
-// ... rest of process ...
-            double pitchBendFactor = std::pow(2.0, (pitchBend + lfoVal) / 12.0);
+            double pitchBendFactor = std::pow(2.0, (currentPitchBend * bendRange + lfoVal) / 12.0);
             double currentFreq = baseFreq * pitchBendFactor;
             
             // Shepard calculation: Sum octaves until outside audible range.
@@ -96,12 +102,15 @@ void ShepardSynthesizer::process(float* output, int numFrames) {
 
 void ShepardSynthesizer::noteOn(int noteIndex, float volume) {
     std::lock_guard<std::mutex> lock(voiceMutex);
-    // Reset phase and timer only if note was not already active
-    if (!voices[noteIndex].active && voices[noteIndex].envelope <= 0) {
-        voices[noteIndex].phase = 0;
+    // Only reset phase and timer if the note was not already active (new key press).
+    // If active is true, it's a volume update from ACTION_MOVE on the same key.
+    if (!voices[noteIndex].active) {
+        if (voices[noteIndex].envelope <= 0) {
+            voices[noteIndex].phase = 0;
+        }
+        voices[noteIndex].timerSec = 0;
+        voices[noteIndex].autoReleased = false;
     }
-    voices[noteIndex].timerSec = 0;
-    voices[noteIndex].autoReleased = false;
     voices[noteIndex].active = true;
     voices[noteIndex].volume = volume;
 }
@@ -133,7 +142,15 @@ void ShepardSynthesizer::setModulation(double depth, double rate) {
 
 void ShepardSynthesizer::setPitchBend(float bend) {
     std::lock_guard<std::mutex> lock(voiceMutex);
-    pitchBend = bend * 2.0f; // +/- 2 semitones
+    targetPitchBend = bend;
+}
+
+void ShepardSynthesizer::setPerformanceParams(double br, double bs, double md, double mr) {
+    std::lock_guard<std::mutex> lock(voiceMutex);
+    bendRange = br;
+    bendSlewRate = bs;
+    modDepth = md;
+    modRate = mr;
 }
 
 void ShepardSynthesizer::setFixedDurationMode(bool enabled) {

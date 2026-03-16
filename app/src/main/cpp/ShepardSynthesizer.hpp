@@ -23,8 +23,9 @@ public:
     void noteOff(int noteIndex);
     void allNotesOff();
     void setParams(double attack, double release, double sustain, double centerFreq, double sigma);
+    void setPerformanceParams(double bendRange, double bendSlewRate, double modDepth, double modRate);
     void setModulation(double depth, double rate);
-    void setPitchBend(float bend);
+    void setPitchBend(float bend); // -1.0 to 1.0
     void setFixedDurationMode(bool enabled);
 
 private:
@@ -37,7 +38,11 @@ private:
     bool fixedDurationMode = false;
     double centerFreq = 440.0;
     double sigma = 1.0;
-    float pitchBend = 0.0f; // in semitones
+    
+    float targetPitchBend = 0.0f; // in -1.0 to 1.0
+    float currentPitchBend = 0.0f; // smoothed
+    double bendRange = 2.0;       // in semitones
+    double bendSlewRate = 0.95;   // 0.0 to 1.0 (higher = slower)
     
     double lfoPhase = 0.0;
     double modDepth = 0.0; // in semitones

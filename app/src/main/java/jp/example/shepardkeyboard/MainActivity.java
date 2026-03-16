@@ -69,8 +69,14 @@ public class MainActivity extends AppCompatActivity {
 
         SharedPreferences globalPrefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         params.recordingMode = globalPrefs.getBoolean("global_recording_mode", false);
+        params.bendRange = globalPrefs.getFloat("perf_bend_range", 1.0f);
+        params.bendSlewRate = globalPrefs.getFloat("perf_bend_slew", 0.5f);
+        params.modulationDepth = globalPrefs.getFloat("perf_mod_depth", 0.5f);
+        params.modulationRate = globalPrefs.getFloat("perf_mod_rate", 5.0f);
+        params.bufferSize = globalPrefs.getInt("perf_buffer_size", 512);
 
         NativeAudioEngine.create(params.recordingMode);
+        NativeAudioEngine.setBufferSize(params.bufferSize);
 
         tvTranspose = findViewById(R.id.tv_transpose);
         envelopeView = findViewById(R.id.envelope_view);
@@ -102,10 +108,6 @@ public class MainActivity extends AppCompatActivity {
         MobileAds.initialize(this, initializationStatus -> {
             loadInterstitialAd();
         });
-
-        SharedPreferences globalPrefs_init = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        params.recordingMode = globalPrefs_init.getBoolean("global_recording_mode", false);
-        // Note: NativeAudioEngine.create is now called earlier with this value
 
         initDefaultPresets();
         syncNativeParams();
@@ -230,8 +232,9 @@ public class MainActivity extends AppCompatActivity {
         seekModulation.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                params.modulationDepth = progress / 50.0; // 0 to 2 semitones
-                syncNativeParams();
+                // Scaling the lever (0-100) by the "Max" depth set in settings
+                double scaledDepth = (progress / 100.0) * params.modulationDepth;
+                NativeAudioEngine.setPerformanceParams(params.bendRange, params.bendSlewRate, scaledDepth, params.modulationRate);
             }
 
             @Override
@@ -283,8 +286,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void syncNativeParams() {
+        double scaledModDepth = (seekModulation.getProgress() / 100.0) * params.modulationDepth;
         NativeAudioEngine.setParams(params.attackSec, params.releaseSec, params.durationSec, params.centerFreq, params.sigma);
-        NativeAudioEngine.setModulation(params.modulationDepth, params.modulationRate);
+        NativeAudioEngine.setPerformanceParams(params.bendRange, params.bendSlewRate, scaledModDepth, params.modulationRate);
         NativeAudioEngine.setBufferSize(params.bufferSize);
     }
 
@@ -432,18 +436,16 @@ public class MainActivity extends AppCompatActivity {
 
     private void showSettingsDialog() {
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_settings, null);
-        SeekBar seekAttack = dialogView.findViewById(R.id.seek_attack);
-        SeekBar seekRelease = dialogView.findViewById(R.id.seek_release);
-        SeekBar seekDuration = dialogView.findViewById(R.id.seek_duration);
-        SeekBar seekCenter = dialogView.findViewById(R.id.seek_center_freq);
-        SeekBar seekSigma = dialogView.findViewById(R.id.seek_sigma);
+        SeekBar seekBendRange = dialogView.findViewById(R.id.seek_bend_range);
+        SeekBar seekBendSlew = dialogView.findViewById(R.id.seek_bend_slew);
+        SeekBar seekModDepth = dialogView.findViewById(R.id.seek_modulation_depth);
+        SeekBar seekModRate = dialogView.findViewById(R.id.seek_modulation_rate);
         SeekBar seekBufferSize = dialogView.findViewById(R.id.seek_buffer_size);
 
-        TextView labelAttack = dialogView.findViewById(R.id.label_attack);
-        TextView labelRelease = dialogView.findViewById(R.id.label_release);
-        TextView labelDuration = dialogView.findViewById(R.id.label_duration);
-        TextView labelCenter = dialogView.findViewById(R.id.label_center_freq);
-        TextView labelSigma = dialogView.findViewById(R.id.label_sigma);
+        TextView labelBendRange = dialogView.findViewById(R.id.label_bend_range);
+        TextView labelBendSlew = dialogView.findViewById(R.id.label_bend_slew);
+        TextView labelModDepth = dialogView.findViewById(R.id.label_modulation_depth);
+        TextView labelModRate = dialogView.findViewById(R.id.label_modulation_rate);
         TextView labelBufferSize = dialogView.findViewById(R.id.label_buffer_size);
 
         View monoSwitch = dialogView.findViewById(R.id.switch_mono);
@@ -455,70 +457,82 @@ public class MainActivity extends AppCompatActivity {
 
         Button btnApply = dialogView.findViewById(R.id.btn_apply);
 
-        // Helper to update text
-        seekAttack.setOnSeekBarChangeListener(createSeekListener(labelAttack, "Attack (ms): %d"));
-        seekRelease.setOnSeekBarChangeListener(createSeekListener(labelRelease, "Release (ms): %d"));
-        seekDuration.setOnSeekBarChangeListener(createSeekListener(labelDuration, "Duration (ms): %d"));
-        seekCenter.setOnSeekBarChangeListener(createSeekListener(labelCenter, "Center Frequency (Hz): %d"));
-        seekSigma.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+        // Listeners for labels
+        seekBendRange.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                labelSigma.setText(String.format("Sigma (Spectral Width): %.1f", Math.max(0.1, progress / 50.0)));
+                labelBendRange.setText(String.format("Pitch Bend Range: %.1f semitones", progress * 0.5));
             }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-            }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
         });
 
-        seekBufferSize.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+        seekBendSlew.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                labelBufferSize.setText("Buffer Size (Frames): " + progress);
+                labelBendSlew.setText(String.format("Pitch Bend Smoothing: %d%%", progress));
             }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-            }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
         });
 
-        seekAttack.setProgress((int) (params.attackSec * 1000));
-        seekRelease.setProgress((int) (params.releaseSec * 1000));
-        seekDuration.setProgress((int) (params.durationSec * 1000));
-        seekCenter.setProgress((int) params.centerFreq);
-        seekSigma.setProgress((int) (params.sigma * 50));
+        seekModDepth.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                labelModDepth.setText(String.format("Max Modulation Depth: %.1f semitones", progress / 10.0));
+            }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+
+        seekModRate.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                labelModRate.setText(String.format("Modulation Rate: %.1f Hz", progress / 10.0));
+            }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+
+        seekBufferSize.setOnSeekBarChangeListener(createSeekListener(labelBufferSize, "Buffer Size (Frames): %d"));
+
+        // Set initial progress
+        seekBendRange.setProgress((int) (params.bendRange * 2));
+        seekBendSlew.setProgress((int) (params.bendSlewRate * 100));
+        seekModDepth.setProgress((int) (params.modulationDepth * 10));
+        seekModRate.setProgress((int) (params.modulationRate * 10));
         seekBufferSize.setProgress(params.bufferSize);
+        
+        // Update labels initially
+        labelBendRange.setText(String.format("Pitch Bend Range: %.1f semitones", params.bendRange));
+        labelBendSlew.setText(String.format("Pitch Bend Smoothing: %d%%", (int)(params.bendSlewRate * 100)));
+        labelModDepth.setText(String.format("Max Modulation Depth: %.1f semitones", params.modulationDepth));
+        labelModRate.setText(String.format("Modulation Rate: %.1f Hz", params.modulationRate));
+        labelBufferSize.setText(String.format("Buffer Size (Frames): %d", params.bufferSize));
 
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setView(dialogView)
                 .create();
 
         btnApply.setOnClickListener(v -> {
-            params.attackSec = seekAttack.getProgress() / 1000.0;
-            params.releaseSec = seekRelease.getProgress() / 1000.0;
-            params.durationSec = Math.max(0.1, seekDuration.getProgress() / 1000.0);
-            params.centerFreq = Math.max(50, seekCenterFreq.getProgress());
-            params.sigma = Math.max(0.1, seekSigma.getProgress() / 50.0);
+            params.bendRange = seekBendRange.getProgress() * 0.5;
+            params.bendSlewRate = seekBendSlew.getProgress() / 100.0;
+            params.modulationDepth = seekModDepth.getProgress() / 10.0;
+            params.modulationRate = seekModRate.getProgress() / 10.0;
             params.bufferSize = Math.max(64, seekBufferSize.getProgress());
             params.recordingMode = swRecording.isChecked();
 
-            // Sync with main sliders
-            seekCenterFreq.setProgress((int) params.centerFreq);
-            seekSigma.setProgress((int) (params.sigma * 50));
-
             NativeAudioEngine.setRecordingMode(params.recordingMode);
             getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-                    .putBoolean("global_recording_mode", params.recordingMode).apply();
+                    .putBoolean("global_recording_mode", params.recordingMode)
+                    .putFloat("perf_bend_range", (float) params.bendRange)
+                    .putFloat("perf_bend_slew", (float) params.bendSlewRate)
+                    .putFloat("perf_mod_depth", (float) params.modulationDepth)
+                    .putFloat("perf_mod_rate", (float) params.modulationRate)
+                    .putInt("perf_buffer_size", params.bufferSize)
+                    .apply();
+            
             syncNativeParams();
-            envelopeView.setParams(params);
             dialog.dismiss();
         });
 

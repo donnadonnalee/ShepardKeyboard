@@ -11,6 +11,7 @@ public class NativeAudioEngine {
     public static native void setNoteOff(int noteIndex);
     public static native void setAllNotesOff();
     public static native void setParams(double attack, double release, double sustain, double centerFreq, double sigma);
+    public static native void setPerformanceParams(double bendRange, double bendSlewRate, double modDepth, double modRate);
     public static native void setFixedDurationMode(boolean enabled);
     public static native void setRecordingMode(boolean enabled);
     public static native void setModulation(double depth, double rate);

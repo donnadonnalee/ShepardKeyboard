@@ -10,63 +10,55 @@
         android:orientation="vertical">
 
         <TextView
-            android:id="@+id/label_attack"
+            android:id="@+id/label_bend_range"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Attack (ms)" />
+            android:text="Pitch Bend Range (semitones)" />
         <SeekBar
-            android:id="@+id/seek_attack"
+            android:id="@+id/seek_bend_range"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:max="1000" />
+            android:max="6"
+            android:progress="2" />
 
         <TextView
-            android:id="@+id/label_duration"
+            android:id="@+id/label_bend_slew"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Duration (ms)"
+            android:text="Pitch Bend Smoothing"
             android:layout_marginTop="8dp" />
         <SeekBar
-            android:id="@+id/seek_duration"
+            android:id="@+id/seek_bend_slew"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:max="5000" />
+            android:max="100"
+            android:progress="50" />
 
         <TextView
-            android:id="@+id/label_release"
+            android:id="@+id/label_modulation_depth"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Release (ms)"
+            android:text="Max Modulation Depth (semitones)"
             android:layout_marginTop="8dp" />
         <SeekBar
-            android:id="@+id/seek_release"
+            android:id="@+id/seek_modulation_depth"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:max="2000" />
+            android:max="200"
+            android:progress="0" />
 
         <TextView
-            android:id="@+id/label_center_freq"
+            android:id="@+id/label_modulation_rate"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Center Frequency (Hz)"
+            android:text="Modulation Rate (Hz)"
             android:layout_marginTop="8dp" />
         <SeekBar
-            android:id="@+id/seek_center_freq"
+            android:id="@+id/seek_modulation_rate"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:max="2000" />
-
-        <TextView
-            android:id="@+id/label_sigma"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Sigma (Spectral Width)"
-            android:layout_marginTop="8dp" />
-        <SeekBar
-            android:id="@+id/seek_sigma"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:max="200" />
+            android:max="200"
+            android:progress="50" />
 
         <Switch
             android:id="@+id/switch_mono"

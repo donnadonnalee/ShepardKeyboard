@@ -56,6 +56,7 @@ public:
     void noteOff(int index) { synth->noteOff(index); }
     void allNotesOff() { synth->allNotesOff(); }
     void setParams(double a, double r, double sus, double cf, double s) { synth->setParams(a, r, sus, cf, s); }
+    void setPerformanceParams(double br, double bs, double md, double mr) { synth->setPerformanceParams(br, bs, md, mr); }
     void setModulation(double d, double r) { synth->setModulation(d, r); }
     void setPitchBend(float b) { synth->setPitchBend(b); }
     void setFixedDurationMode(bool enabled) { synth->setFixedDurationMode(enabled); }
@@ -118,6 +119,11 @@ Java_jp_example_shepardkeyboard_NativeAudioEngine_setAllNotesOff(JNIEnv *env, jc
 JNIEXPORT void JNICALL
 Java_jp_example_shepardkeyboard_NativeAudioEngine_setParams(JNIEnv *env, jclass clazz, jdouble attack, jdouble release, jdouble sustain, jdouble center_freq, jdouble sigma) {
     if (engine) engine->setParams(attack, release, sustain, center_freq, sigma);
+}
+
+JNIEXPORT void JNICALL
+Java_jp_example_shepardkeyboard_NativeAudioEngine_setPerformanceParams(JNIEnv *env, jclass clazz, jdouble bend_range, jdouble bend_slew, jdouble mod_depth, jdouble mod_rate) {
+    if (engine) engine->setPerformanceParams(bend_range, bend_slew, mod_depth, mod_rate);
 }
 
 JNIEXPORT void JNICALL

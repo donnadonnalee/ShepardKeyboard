@@ -25,6 +25,8 @@ public class ShepardGenerator {
         public double modulationRate = 5.0;  // Hz
         public boolean fixedDuration = false;
         public boolean recordingMode = false;
+        public double bendRange = 12.0; // semitones (octave by default)
+        public double bendSlewRate = 0.95; // 0.0 to 1.0 (higher = slower)
     }
 
     public static byte[] generateNote(double frequency, Params params, ProgressListener listener) {
