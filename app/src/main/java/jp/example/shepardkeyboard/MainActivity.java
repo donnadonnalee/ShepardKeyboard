@@ -3,6 +3,10 @@ package jp.example.shepardkeyboard;
 import android.annotation.SuppressLint;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.graphics.PorterDuff;
+import android.graphics.drawable.Drawable;
+import android.graphics.Rect;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -63,7 +67,10 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        NativeAudioEngine.create();
+        SharedPreferences globalPrefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        params.recordingMode = globalPrefs.getBoolean("global_recording_mode", false);
+
+        NativeAudioEngine.create(params.recordingMode);
 
         tvTranspose = findViewById(R.id.tv_transpose);
         envelopeView = findViewById(R.id.envelope_view);
@@ -82,6 +89,7 @@ public class MainActivity extends AppCompatActivity {
             params.fixedDuration = isChecked;
             NativeAudioEngine.setFixedDurationMode(isChecked);
             syncNativeParams();
+            envelopeView.invalidate();
         });
 
         findViewById(R.id.ib_settings).setOnClickListener(v -> showSettingsDialog());
@@ -94,6 +102,10 @@ public class MainActivity extends AppCompatActivity {
         MobileAds.initialize(this, initializationStatus -> {
             loadInterstitialAd();
         });
+
+        SharedPreferences globalPrefs_init = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        params.recordingMode = globalPrefs_init.getBoolean("global_recording_mode", false);
+        // Note: NativeAudioEngine.create is now called earlier with this value
 
         initDefaultPresets();
         syncNativeParams();
@@ -153,6 +165,42 @@ public class MainActivity extends AppCompatActivity {
             public void onStopTrackingTouch(SeekBar seekBar) {
             }
         });
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) {
+            hideSystemUI();
+            excludeGestures();
+        }
+    }
+
+    private void excludeGestures() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            View root = findViewById(android.R.id.content);
+            root.post(() -> {
+                int width = root.getWidth();
+                int height = root.getHeight();
+                // Exclude the entire screen or at least the edges for the keyboard/sliders
+                List<Rect> exclusionRects = new ArrayList<>();
+                // Exclude left and right edges (200px each)
+                exclusionRects.add(new Rect(0, 0, 200, height));
+                exclusionRects.add(new Rect(width - 200, 0, width, height));
+                root.setSystemGestureExclusionRects(exclusionRects);
+            });
+        }
+    }
+
+    private void hideSystemUI() {
+        View decorView = getWindow().getDecorView();
+        decorView.setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_FULLSCREEN);
     }
 
     private void setupRealTimeControls() {
@@ -354,10 +402,14 @@ public class MainActivity extends AppCompatActivity {
             View v = entry.getKey();
             int note = (entry.getValue() + transposeOffset + 12) % 12;
             boolean isBlack = getResources().getResourceEntryName(v.getId()).endsWith("s");
-            if (currentlyPlaying.contains(note)) {
-                v.setBackgroundColor(Color.GRAY);
-            } else {
-                v.setBackgroundColor(isBlack ? Color.BLACK : Color.WHITE);
+            
+            Drawable bg = v.getBackground();
+            if (bg != null) {
+                if (currentlyPlaying.contains(note)) {
+                    bg.setColorFilter(Color.GRAY, PorterDuff.Mode.MULTIPLY);
+                } else {
+                    bg.clearColorFilter();
+                }
             }
         }
     }
@@ -397,6 +449,9 @@ public class MainActivity extends AppCompatActivity {
         View monoSwitch = dialogView.findViewById(R.id.switch_mono);
         if (monoSwitch != null)
             monoSwitch.setVisibility(View.GONE);
+
+        Switch swRecording = dialogView.findViewById(R.id.switch_recording_mode);
+        swRecording.setChecked(params.recordingMode);
 
         Button btnApply = dialogView.findViewById(R.id.btn_apply);
 
@@ -453,11 +508,15 @@ public class MainActivity extends AppCompatActivity {
             params.centerFreq = Math.max(50, seekCenterFreq.getProgress());
             params.sigma = Math.max(0.1, seekSigma.getProgress() / 50.0);
             params.bufferSize = Math.max(64, seekBufferSize.getProgress());
+            params.recordingMode = swRecording.isChecked();
 
             // Sync with main sliders
             seekCenterFreq.setProgress((int) params.centerFreq);
             seekSigma.setProgress((int) (params.sigma * 50));
 
+            NativeAudioEngine.setRecordingMode(params.recordingMode);
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                    .putBoolean("global_recording_mode", params.recordingMode).apply();
             syncNativeParams();
             envelopeView.setParams(params);
             dialog.dismiss();
@@ -509,6 +568,7 @@ public class MainActivity extends AppCompatActivity {
             json.put("sigma", params.sigma);
             json.put("gain", params.gain);
             json.put("bufferSize", params.bufferSize);
+            json.put("recordingMode", params.recordingMode);
 
             SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
             prefs.edit().putString(name, json.toString()).apply();

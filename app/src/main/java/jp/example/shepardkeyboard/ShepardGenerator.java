@@ -24,6 +24,7 @@ public class ShepardGenerator {
         public double modulationDepth = 0.0; // semitones
         public double modulationRate = 5.0;  // Hz
         public boolean fixedDuration = false;
+        public boolean recordingMode = false;
     }
 
     public static byte[] generateNote(double frequency, Params params, ProgressListener listener) {
