@@ -75,6 +75,19 @@
             android:text="Monophonic Mode"
             android:layout_marginTop="16dp" />
 
+        <TextView
+            android:id="@+id/label_buffer_size"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Buffer Size (Frames)"
+            android:layout_marginTop="8dp" />
+        <SeekBar
+            android:id="@+id/seek_buffer_size"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="1024"
+            android:min="64" />
+
         <Button
             android:id="@+id/btn_apply"
             android:layout_width="match_parent"

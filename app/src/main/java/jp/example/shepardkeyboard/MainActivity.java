@@ -29,59 +29,74 @@ import com.google.android.gms.ads.LoadAdError;
 import com.google.android.gms.ads.MobileAds;
 import com.google.android.gms.ads.interstitial.InterstitialAd;
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback;
+import com.google.android.material.switchmaterial.SwitchMaterial;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
     private static final String PREFS_NAME = "ShepardPresets";
 
-    private SoundManager soundManager;
     private ShepardGenerator.Params params = new ShepardGenerator.Params();
-    private boolean isMonophonic = false;
     private int transposeOffset = 0; // -6 to +6
-    private AlertDialog progressDialog;
     private TextView tvTranspose;
     private EnvelopeView envelopeView;
     private InterstitialAd mInterstitialAd;
 
-    // Custom Progress Dialog Views
-    private AnalogClockProgressView analogClockView;
-    private TextView tvProgressStatus;
-
+    // Real-time Controls
+    private SeekBar seekPitchBend;
+    private SeekBar seekModulation;
+    private SeekBar seekCenterFreq;
+    private SeekBar seekSigma;
+    private final Map<Integer, Integer> activePointers = new HashMap<>();
+    private final Map<View, Integer> viewToNote = new HashMap<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        soundManager = new SoundManager(this);
+        NativeAudioEngine.create();
 
         tvTranspose = findViewById(R.id.tv_transpose);
+        envelopeView = findViewById(R.id.envelope_view);
+        envelopeView.setParams(params);
+
         setupTransposeSeekBar();
-        setupMonoSwitch();
+        setupRealTimeControls();
         setupKeyboard();
+
+        envelopeView.setOnEnvelopeChangeListener((attack, sustain, release) -> {
+            syncNativeParams();
+        });
+
+        SwitchMaterial swFixedDuration = findViewById(R.id.sw_fixed_duration);
+        swFixedDuration.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            params.fixedDuration = isChecked;
+            NativeAudioEngine.setFixedDurationMode(isChecked);
+            syncNativeParams();
+        });
 
         findViewById(R.id.ib_settings).setOnClickListener(v -> showSettingsDialog());
         findViewById(R.id.ib_save).setOnClickListener(v -> showSavePresetDialog());
         findViewById(R.id.ib_load).setOnClickListener(v -> showLoadPresetDialog());
 
-        envelopeView = findViewById(R.id.envelope_view);
-        envelopeView.setParams(params);
+        findViewById(R.id.btn_main_share).setOnClickListener(v -> shareApp());
+        findViewById(R.id.btn_main_ads).setOnClickListener(v -> showInterstitialAd());
 
         MobileAds.initialize(this, initializationStatus -> {
             loadInterstitialAd();
         });
 
         initDefaultPresets();
-
-        regenerateSounds();
+        syncNativeParams();
     }
 
     private void initDefaultPresets() {
@@ -122,10 +137,11 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 transposeOffset = progress - 6;
-                String[] noteNames = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+                String[] noteNames = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
                 // 0 is C. -6 to +6.
                 int noteIndex = (transposeOffset + 12) % 12;
-                tvTranspose.setText("Key: " + noteNames[noteIndex] + " (" + (transposeOffset >= 0 ? "+" : "") + transposeOffset + ")");
+                tvTranspose.setText("Key: " + noteNames[noteIndex] + " (" + (transposeOffset >= 0 ? "+" : "")
+                        + transposeOffset + ")");
 
             }
 
@@ -139,13 +155,89 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private void setupMonoSwitch() {
-        @SuppressLint("UseSwitchCompatOrMaterialCode")
-        Switch switchMono = findViewById(R.id.main_switch_mono);
-        switchMono.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            isMonophonic = isChecked;
-            soundManager.setMonophonic(isMonophonic);
+    private void setupRealTimeControls() {
+        seekPitchBend = findViewById(R.id.seek_pitch_bend);
+        seekModulation = findViewById(R.id.seek_modulation);
+        seekCenterFreq = findViewById(R.id.main_seek_center);
+        seekSigma = findViewById(R.id.main_seek_sigma);
+
+        seekPitchBend.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                float bend = (progress - 100) / 100.0f; // -1.0 to 1.0
+                NativeAudioEngine.setPitchBend(bend);
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                seekBar.setProgress(100);
+                NativeAudioEngine.setPitchBend(0);
+            }
         });
+
+        seekModulation.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                params.modulationDepth = progress / 50.0; // 0 to 2 semitones
+                syncNativeParams();
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
+        });
+
+        seekCenterFreq.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                params.centerFreq = progress;
+                syncNativeParams();
+                envelopeView.invalidate();
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
+        });
+
+        seekSigma.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                params.sigma = Math.max(0.1, progress / 50.0);
+                syncNativeParams();
+                envelopeView.invalidate();
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
+        });
+
+        // Initial sync
+        seekCenterFreq.setProgress((int) params.centerFreq);
+        seekSigma.setProgress((int) (params.sigma * 50));
+    }
+
+    private void syncNativeParams() {
+        NativeAudioEngine.setParams(params.attackSec, params.releaseSec, params.durationSec, params.centerFreq, params.sigma);
+        NativeAudioEngine.setModulation(params.modulationDepth, params.modulationRate);
+        NativeAudioEngine.setBufferSize(params.bufferSize);
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -155,97 +247,135 @@ public class MainActivity extends AppCompatActivity {
                 R.id.key_fs, R.id.key_g, R.id.key_gs, R.id.key_a, R.id.key_as, R.id.key_b
         };
 
+        View container = findViewById(R.id.keyboard_container);
+        List<View> blackKeys = new ArrayList<>();
+        List<View> whiteKeys = new ArrayList<>();
+        viewToNote.clear();
+
         for (int i = 0; i < keyIds.length; i++) {
-            final int index = i;
-            final View keyView = findViewById(keyIds[i]);
-
-            final boolean isBlackKey = getResources().getResourceEntryName(keyIds[i]).endsWith("s");
-            final int originalColor = isBlackKey ? Color.BLACK : Color.WHITE;
-            final int pressedColor = Color.GRAY;
-
-            keyView.setOnTouchListener((v, event) -> {
-                switch (event.getAction()) {
-                    case MotionEvent.ACTION_DOWN:
-                        v.setBackgroundColor(pressedColor);
-                        float y = event.getY();
-                        float height = v.getHeight();
-                        float volume = Math.max(0.1f, Math.min(1.0f, y / height));
-                        int noteToPlay = (index + transposeOffset + 12) % 12;
-                        soundManager.playNote(noteToPlay, volume);
-                        return true;
-                    case MotionEvent.ACTION_UP:
-                    case MotionEvent.ACTION_CANCEL:
-                        v.setBackgroundColor(originalColor);
-                        return true;
-                }
-                return false;
-            });
+            View v = findViewById(keyIds[i]);
+            viewToNote.put(v, i);
+            if (getResources().getResourceEntryName(keyIds[i]).endsWith("s")) {
+                blackKeys.add(v);
+            } else {
+                whiteKeys.add(v);
+            }
         }
+
+        container.setOnTouchListener((v, event) -> {
+            int actionMasked = event.getActionMasked();
+            int pointerIndex = event.getActionIndex();
+            int pointerId = event.getPointerId(pointerIndex);
+
+            switch (actionMasked) {
+                case MotionEvent.ACTION_DOWN:
+                case MotionEvent.ACTION_POINTER_DOWN:
+                case MotionEvent.ACTION_MOVE:
+                    // For ACTION_MOVE, we need to check all active pointers
+                    for (int i = 0; i < event.getPointerCount(); i++) {
+                        int pid = event.getPointerId(i);
+                        float x = event.getX(i);
+                        float y = event.getY(i);
+                        handleTouch(container, pid, x, y, blackKeys, whiteKeys, viewToNote);
+                    }
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_POINTER_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    stopTouch(pointerId);
+                    updateKeyVisuals(viewToNote, activePointers.values());
+                    break;
+            }
+            return true;
+        });
+    }
+
+    private void handleTouch(View container, int pointerId, float x, float y, List<View> blackKeys, List<View> whiteKeys, Map<View, Integer> viewToNote) {
+        View targetKey = null;
+
+        // Check black keys first (top layer)
+        for (View v : blackKeys) {
+            if (isPointInside(v, x, y)) {
+                targetKey = v;
+                break;
+            }
+        }
+        // Check white keys if no black key hit
+        if (targetKey == null) {
+            for (View v : whiteKeys) {
+                if (isPointInside(v, x, y)) {
+                    targetKey = v;
+                    break;
+                }
+            }
+        }
+
+        Integer lastNote = activePointers.get(pointerId);
+        if (targetKey != null) {
+            int newNoteIndex = viewToNote.get(targetKey);
+            int transposedNote = (newNoteIndex + transposeOffset + 12) % 12;
+
+            float volume = y / targetKey.getHeight(); // This Y is relative to container, needs to be relative to key
+            // Correcting volume calculation for container-level touch
+            float relativeY = y - targetKey.getTop();
+            volume = relativeY / targetKey.getHeight();
+            volume = Math.max(0.01f, Math.min(1.0f, volume));
+
+            if (lastNote == null || lastNote != transposedNote) {
+                // Update pointers first to correctly check if other fingers are holding the old note
+                activePointers.remove(pointerId);
+                if (lastNote != null && !activePointers.values().contains(lastNote)) {
+                    NativeAudioEngine.setNoteOff(lastNote);
+                }
+                NativeAudioEngine.setNoteOn(transposedNote, volume);
+                activePointers.put(pointerId, transposedNote);
+                updateKeyVisuals(viewToNote, activePointers.values());
+            } else {
+                // Just update volume
+                NativeAudioEngine.setNoteOn(transposedNote, volume);
+            }
+        } else {
+            if (lastNote != null) {
+                stopTouch(pointerId);
+                updateKeyVisuals(viewToNote, activePointers.values());
+            }
+        }
+    }
+
+    private void stopTouch(int pointerId) {
+        Integer note = activePointers.remove(pointerId);
+        if (note != null && !activePointers.values().contains(note)) {
+            NativeAudioEngine.setNoteOff(note);
+        }
+    }
+
+    private void updateKeyVisuals(Map<View, Integer> viewToNote, Collection<Integer> currentlyPlaying) {
+        for (Map.Entry<View, Integer> entry : viewToNote.entrySet()) {
+            View v = entry.getKey();
+            int note = (entry.getValue() + transposeOffset + 12) % 12;
+            boolean isBlack = getResources().getResourceEntryName(v.getId()).endsWith("s");
+            if (currentlyPlaying.contains(note)) {
+                v.setBackgroundColor(Color.GRAY);
+            } else {
+                v.setBackgroundColor(isBlack ? Color.BLACK : Color.WHITE);
+            }
+        }
+    }
+
+    private boolean isPointInside(View v, float x, float y) {
+        return x >= v.getLeft() && x <= v.getRight() && y >= v.getTop() && y <= v.getBottom();
     }
 
     private void regenerateSounds() {
+        // Redraw only, synthesis is real-time now
         envelopeView.setParams(params);
-        showProgress();
-        new Thread(() -> {
-            soundManager.loadNotes(params, (noteIndex, noteProgress) -> {
-                new Handler(Looper.getMainLooper()).post(() -> {
-                    if (analogClockView != null) {
-                        analogClockView.setProgress(noteIndex, noteProgress);
-                        tvProgressStatus.setText("Synthesizing: Note " + (noteIndex + 1) + "/12");
-                    }
-                });
-            });
-            new Handler(Looper.getMainLooper()).post(() -> {
-                hideProgress();
-                Toast.makeText(MainActivity.this, "Shepard Tones Ready!", Toast.LENGTH_SHORT).show();
-            });
-        }).start();
-
+        syncNativeParams();
     }
 
     private void showProgress() {
-        if (isFinishing() || isDestroyed())
-            return;
-
-        if (progressDialog == null) {
-            View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_progress, null);
-            analogClockView = dialogView.findViewById(R.id.analog_clock_progress);
-            tvProgressStatus = dialogView.findViewById(R.id.tv_progress_status);
-            
-            Button btnShare = dialogView.findViewById(R.id.btn_share_app);
-            Button btnAds = dialogView.findViewById(R.id.btn_watch_ads);
-
-            btnShare.setOnClickListener(v -> shareApp());
-            btnAds.setOnClickListener(v -> showInterstitialAd());
-
-            progressDialog = new AlertDialog.Builder(this)
-                    .setCancelable(false)
-                    .setView(dialogView)
-                    .create();
-        }
-        
-        // Reset progress on show
-        if (analogClockView != null) {
-            analogClockView.setProgress(0, 0);
-        }
-        if (tvProgressStatus != null) {
-            tvProgressStatus.setText("Synthesizing Tones...");
-        }
-
-        if (!progressDialog.isShowing()) {
-            progressDialog.show();
-        }
     }
 
-
     private void hideProgress() {
-        if (!isFinishing() && !isDestroyed() && progressDialog != null && progressDialog.isShowing()) {
-            try {
-                progressDialog.dismiss();
-            } catch (Exception e) {
-                Log.e(TAG, "Error dismissing progress dialog", e);
-            }
-        }
     }
 
     private void showSettingsDialog() {
@@ -255,12 +385,14 @@ public class MainActivity extends AppCompatActivity {
         SeekBar seekDuration = dialogView.findViewById(R.id.seek_duration);
         SeekBar seekCenter = dialogView.findViewById(R.id.seek_center_freq);
         SeekBar seekSigma = dialogView.findViewById(R.id.seek_sigma);
+        SeekBar seekBufferSize = dialogView.findViewById(R.id.seek_buffer_size);
 
         TextView labelAttack = dialogView.findViewById(R.id.label_attack);
         TextView labelRelease = dialogView.findViewById(R.id.label_release);
         TextView labelDuration = dialogView.findViewById(R.id.label_duration);
         TextView labelCenter = dialogView.findViewById(R.id.label_center_freq);
         TextView labelSigma = dialogView.findViewById(R.id.label_sigma);
+        TextView labelBufferSize = dialogView.findViewById(R.id.label_buffer_size);
 
         View monoSwitch = dialogView.findViewById(R.id.switch_mono);
         if (monoSwitch != null)
@@ -278,8 +410,29 @@ public class MainActivity extends AppCompatActivity {
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 labelSigma.setText(String.format("Sigma (Spectral Width): %.1f", Math.max(0.1, progress / 50.0)));
             }
-            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
-            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
+        });
+
+        seekBufferSize.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                labelBufferSize.setText("Buffer Size (Frames): " + progress);
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
         });
 
         seekAttack.setProgress((int) (params.attackSec * 1000));
@@ -287,6 +440,7 @@ public class MainActivity extends AppCompatActivity {
         seekDuration.setProgress((int) (params.durationSec * 1000));
         seekCenter.setProgress((int) params.centerFreq);
         seekSigma.setProgress((int) (params.sigma * 50));
+        seekBufferSize.setProgress(params.bufferSize);
 
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setView(dialogView)
@@ -296,10 +450,16 @@ public class MainActivity extends AppCompatActivity {
             params.attackSec = seekAttack.getProgress() / 1000.0;
             params.releaseSec = seekRelease.getProgress() / 1000.0;
             params.durationSec = Math.max(0.1, seekDuration.getProgress() / 1000.0);
-            params.centerFreq = Math.max(50, seekCenter.getProgress());
+            params.centerFreq = Math.max(50, seekCenterFreq.getProgress());
             params.sigma = Math.max(0.1, seekSigma.getProgress() / 50.0);
+            params.bufferSize = Math.max(64, seekBufferSize.getProgress());
 
-            regenerateSounds();
+            // Sync with main sliders
+            seekCenterFreq.setProgress((int) params.centerFreq);
+            seekSigma.setProgress((int) (params.sigma * 50));
+
+            syncNativeParams();
+            envelopeView.setParams(params);
             dialog.dismiss();
         });
 
@@ -312,8 +472,14 @@ public class MainActivity extends AppCompatActivity {
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 label.setText(String.format(format, progress));
             }
-            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
-            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
         };
     }
 
@@ -342,6 +508,7 @@ public class MainActivity extends AppCompatActivity {
             json.put("centerFreq", params.centerFreq);
             json.put("sigma", params.sigma);
             json.put("gain", params.gain);
+            json.put("bufferSize", params.bufferSize);
 
             SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
             prefs.edit().putString(name, json.toString()).apply();
@@ -379,9 +546,10 @@ public class MainActivity extends AppCompatActivity {
                 params.attackSec = json.optDouble("attack", 0.05);
                 params.releaseSec = json.optDouble("release", 0.5);
                 params.durationSec = json.optDouble("duration", 1.0);
-                params.centerFreq = json.optDouble("centerFreq", 440.0);
+                params.centerFreq = json.optDouble("centerFreq", 600.0);
                 params.sigma = json.optDouble("sigma", 1.0);
                 params.gain = json.optDouble("gain", 0.8);
+                params.bufferSize = json.optInt("bufferSize", 256);
 
                 Toast.makeText(this, "Loaded '" + name + "'", Toast.LENGTH_SHORT).show();
                 regenerateSounds();
@@ -431,10 +599,8 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
-
         super.onDestroy();
-        if (soundManager != null) {
-            soundManager.release();
-        }
+        NativeAudioEngine.delete();
     }
+
 }
