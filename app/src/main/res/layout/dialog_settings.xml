@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/label_attack"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Attack (ms)" />
+        <SeekBar
+            android:id="@+id/seek_attack"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="1000" />
+
+        <TextView
+            android:id="@+id/label_duration"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Duration (ms)"
+            android:layout_marginTop="8dp" />
+        <SeekBar
+            android:id="@+id/seek_duration"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="5000" />
+
+        <TextView
+            android:id="@+id/label_release"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Release (ms)"
+            android:layout_marginTop="8dp" />
+        <SeekBar
+            android:id="@+id/seek_release"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="2000" />
+
+        <TextView
+            android:id="@+id/label_center_freq"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Center Frequency (Hz)"
+            android:layout_marginTop="8dp" />
+        <SeekBar
+            android:id="@+id/seek_center_freq"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="2000" />
+
+        <TextView
+            android:id="@+id/label_sigma"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Sigma (Spectral Width)"
+            android:layout_marginTop="8dp" />
+        <SeekBar
+            android:id="@+id/seek_sigma"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="200" />
+
+        <Switch
+            android:id="@+id/switch_mono"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Monophonic Mode"
+            android:layout_marginTop="16dp" />
+
+        <Button
+            android:id="@+id/btn_apply"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Apply and Regenerate"
+            android:layout_marginTop="16dp" />
+
+    </LinearLayout>
+</ScrollView>
