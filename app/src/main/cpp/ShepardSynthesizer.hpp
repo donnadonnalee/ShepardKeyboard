@@ -27,7 +27,8 @@ public:
     void setFixedDurationMode(bool enabled);
     void setDrive(double drive);
     void setDelay(double time, double feedback, double wet);
-    void setEffectsEnabled(bool pitch, bool mod, bool drive, bool delay);
+    void setFilter(double cutoff, double resonance);
+    void setEffectsEnabled(bool pitch, bool mod, bool drive, bool delay, bool filter);
     
     // Updated noteOn to support slides
     void noteOn(int noteIndex, float volume, bool slideFromOld = false, int oldNoteIndex = -1);
@@ -84,7 +85,13 @@ private:
     bool modEnabled = true;
     bool driveEnabled = true;
     bool delayEnabled = true;
+    bool filterEnabled = true;
 
+    // Filter parameters & state (State Variable Filter)
+    double filterCutoff = 20000.0;
+    double filterResonance = 0.707;
+    double svf_low = 0.0;
+    double svf_band = 0.0;
     static constexpr double kSampleRate = 48000.0;
     static constexpr double kTwoPi = 6.283185307179586;
 };

@@ -62,7 +62,8 @@ public:
     void setFixedDurationMode(bool enabled) { synth->setFixedDurationMode(enabled); }
     void setDrive(double d) { synth->setDrive(d); }
     void setDelay(double t, double f, double w) { synth->setDelay(t, f, w); }
-    void setEffectsEnabled(bool p, bool m, bool dr, bool de) { synth->setEffectsEnabled(p, m, dr, de); }
+    void setFilter(double c, double r) { synth->setFilter(c, r); }
+    void setEffectsEnabled(bool p, bool m, bool dr, bool de, bool f) { synth->setEffectsEnabled(p, m, dr, de, f); }
     void setRecordingMode(bool enabled) {
         if (recordingMode != enabled) {
             __android_log_print(ANDROID_LOG_INFO, TAG, "Restarting stream for RecordingMode=%s", enabled ? "ON" : "OFF");
@@ -165,8 +166,13 @@ Java_jp_example_shepardkeyboard_NativeAudioEngine_setDelay(JNIEnv *env, jclass c
 }
 
 JNIEXPORT void JNICALL
-Java_jp_example_shepardkeyboard_NativeAudioEngine_setEffectsEnabled(JNIEnv *env, jclass clazz, jboolean pitch, jboolean mod, jboolean drive, jboolean delay) {
-    if (engine) engine->setEffectsEnabled(pitch, mod, drive, delay);
+Java_jp_example_shepardkeyboard_NativeAudioEngine_setEffectsEnabled(JNIEnv *env, jclass clazz, jboolean pitch, jboolean mod, jboolean drive, jboolean delay, jboolean filter) {
+    if (engine) engine->setEffectsEnabled(pitch, mod, drive, delay, filter);
+}
+
+JNIEXPORT void JNICALL
+Java_jp_example_shepardkeyboard_NativeAudioEngine_setFilter(JNIEnv *env, jclass clazz, jdouble cutoff, jdouble resonance) {
+    if (engine) engine->setFilter(cutoff, resonance);
 }
 
 JNIEXPORT void JNICALL

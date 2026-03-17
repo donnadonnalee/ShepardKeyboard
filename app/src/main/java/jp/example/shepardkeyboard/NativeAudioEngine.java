@@ -19,6 +19,7 @@ public class NativeAudioEngine {
     public static native void setPitchBend(float bend); // -1.0 to 1.0
     public static native void setDrive(double drive);
     public static native void setDelay(double time, double feedback, double wet);
-    public static native void setEffectsEnabled(boolean pitch, boolean mod, boolean drive, boolean delay);
+    public static native void setEffectsEnabled(boolean pitch, boolean mod, boolean drive, boolean delay, boolean filter);
+    public static native void setFilter(double cutoff, double resonance);
     public static native void setBufferSize(int frames);
 }

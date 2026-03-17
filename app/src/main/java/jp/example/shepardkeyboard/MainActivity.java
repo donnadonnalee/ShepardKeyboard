@@ -15,9 +15,16 @@ import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.content.Intent;
+import android.net.Uri;
+import android.database.Cursor;
+import android.provider.OpenableColumns;
+import android.media.MediaPlayer;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.ProgressBar;
 import android.widget.SeekBar;
 import android.widget.Switch;
@@ -55,14 +62,39 @@ public class MainActivity extends AppCompatActivity {
     private InterstitialAd mInterstitialAd;
 
     // Real-time Controls
-    private SeekBar seekPitchBend;
-    private SeekBar seekModulation;
-    private SeekBar seekCenterFreq;
-    private SeekBar seekSigma;
-    private SeekBar seekDrive;
-    private TextView tvDriveValue;
+    private SeekBar seekPitchBend, seekModulation, seekDrive;
+    private XYPadView padOscillator, padFilter;
+    private TextView tvCenterFreq, tvSigma, tvDriveValue, tvFilterCutoff, tvFilterResonance;
     private final Map<Integer, Integer> activePointers = new HashMap<>();
     private final Map<View, Integer> viewToNote = new HashMap<>();
+
+    // Audio Player
+    private MediaPlayer mediaPlayer;
+    private View layoutAudioPlayer;
+    private ImageButton ibAudioPlayPause, ibAudioStop;
+    private TextView tvAudioName, tvAudioTime;
+    private SeekBar seekAudioPosition;
+    private final Handler audioHandler = new Handler(Looper.getMainLooper());
+    private final Runnable audioUpdater = new Runnable() {
+        @Override
+        public void run() {
+            if (mediaPlayer != null && mediaPlayer.isPlaying()) {
+                int current = mediaPlayer.getCurrentPosition();
+                seekAudioPosition.setProgress(current);
+                tvAudioTime.setText(formatTime(current) + "/" + formatTime(mediaPlayer.getDuration()));
+                audioHandler.postDelayed(this, 500);
+            }
+        }
+    };
+
+    private final ActivityResultLauncher<String[]> audioPickerLauncher = registerForActivityResult(
+            new ActivityResultContracts.OpenDocument(),
+            uri -> {
+                if (uri != null) {
+                    loadAudio(uri);
+                }
+            }
+    );
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -92,6 +124,9 @@ public class MainActivity extends AppCompatActivity {
         params.isDriveEnabled = globalPrefs.getBoolean("perf_drive_enabled", true);
         params.isDelayEnabled = globalPrefs.getBoolean("perf_delay_enabled", true);
         params.driveLimit = globalPrefs.getFloat("perf_drive_limit", 1.0f);
+        params.isFilterEnabled = globalPrefs.getBoolean("perf_filter_enabled", true);
+        params.filterCutoff = globalPrefs.getFloat("filter_cutoff", 1000.0f);
+        params.filterResonance = globalPrefs.getFloat("filter_resonance", 1.0f);
 
         NativeAudioEngine.create(params.recordingMode);
         NativeAudioEngine.setFixedDurationMode(params.fixedDuration);
@@ -104,6 +139,7 @@ public class MainActivity extends AppCompatActivity {
         setupTransposeSeekBar();
         setupRealTimeControls();
         setupKeyboard();
+        setupAudioPlayerUI();
 
         envelopeView.setOnEnvelopeChangeListener((attack, decay, sustainL, release) -> {
             params.attackSec = attack;
@@ -151,6 +187,7 @@ public class MainActivity extends AppCompatActivity {
         View pitchContainer = findViewById(R.id.performance_pitch_container);
         View modContainer = findViewById(R.id.performance_mod_container);
         View driveContainer = findViewById(R.id.performance_drive_container);
+        View filterContainer = findViewById(R.id.filter_container);
 
         if (pitchContainer != null)
             pitchContainer.setVisibility(params.isPitchEnabled ? View.VISIBLE : View.GONE);
@@ -158,19 +195,22 @@ public class MainActivity extends AppCompatActivity {
             modContainer.setVisibility(params.isModEnabled ? View.VISIBLE : View.GONE);
         if (driveContainer != null)
             driveContainer.setVisibility(params.isDriveEnabled ? View.VISIBLE : View.GONE);
+        if (filterContainer != null)
+            filterContainer.setVisibility(params.isFilterEnabled ? View.VISIBLE : View.GONE);
     }
 
     private void updateValueLabels() {
-        TextView tvCenter = findViewById(R.id.tv_center_freq);
-        TextView tvSigmaLabel = findViewById(R.id.tv_sigma);
-        TextView tvEnv = findViewById(R.id.tv_env_values);
-
-        if (tvCenter != null)
-            tvCenter.setText(String.format("%.0fHz", params.centerFreq));
-        if (tvSigmaLabel != null)
-            tvSigmaLabel.setText(String.format("%.2f", params.sigma));
+        if (tvCenterFreq != null)
+            tvCenterFreq.setText(String.format("%.0fHz", params.centerFreq));
+        if (tvSigma != null)
+            tvSigma.setText(String.format("%.2f", params.sigma));
+        if (tvFilterCutoff != null)
+            tvFilterCutoff.setText(String.format("FLT:%.0fHz", params.filterCutoff));
+        if (tvFilterResonance != null)
+            tvFilterResonance.setText(String.format("Q:%.1f", params.filterResonance));
         if (tvDriveValue != null)
             tvDriveValue.setText(String.format("%d%%", (int)(params.drive * 100)));
+        TextView tvEnv = findViewById(R.id.tv_env_values);
         if (tvEnv != null) {
             tvEnv.setText(String.format("A:%.2f D:%.2f S:%.2f R:%.2f",
                     params.attackSec, params.decaySec, params.sustainLevel, params.releaseSec));
@@ -287,8 +327,18 @@ public class MainActivity extends AppCompatActivity {
     private void setupRealTimeControls() {
         seekPitchBend = findViewById(R.id.seek_pitch_bend);
         seekModulation = findViewById(R.id.seek_modulation);
-        seekCenterFreq = findViewById(R.id.main_seek_center);
-        seekSigma = findViewById(R.id.main_seek_sigma);
+        seekDrive = findViewById(R.id.seek_drive);
+        padOscillator = findViewById(R.id.pad_oscillator);
+        padFilter = findViewById(R.id.pad_filter);
+
+        tvCenterFreq = findViewById(R.id.tv_center_freq);
+        tvSigma = findViewById(R.id.tv_sigma);
+        tvFilterCutoff = findViewById(R.id.tv_filter_cutoff);
+        tvFilterResonance = findViewById(R.id.tv_filter_resonance);
+        tvDriveValue = findViewById(R.id.tv_drive_value);
+
+        padOscillator.setLabels("WIDTH", "FREQ");
+        padFilter.setLabels("RES", "CUTOFF");
 
         seekPitchBend.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
@@ -326,44 +376,6 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        seekCenterFreq.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                params.centerFreq = progress;
-                updateValueLabels();
-                syncNativeParams();
-                envelopeView.invalidate();
-            }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-            }
-        });
-
-        seekSigma.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                params.sigma = Math.max(0.1, progress / 50.0);
-                updateValueLabels();
-                syncNativeParams();
-                envelopeView.invalidate();
-            }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-            }
-        });
-
-        seekDrive = findViewById(R.id.seek_drive);
-        tvDriveValue = findViewById(R.id.tv_drive_value);
         seekDrive.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
@@ -382,10 +394,143 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        padOscillator.setOnXYChangedListener((x, y) -> {
+            // Y: Frequency (200 to 2000, exponential?)
+            params.centerFreq = 200.0 * Math.pow(10, y); // 200 to 2000
+            // X: Sigma (0.1 to 3.0)
+            params.sigma = 0.1 + (x * 2.9);
+            updateValueLabels();
+            syncNativeParams();
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                .putFloat("osc_center", (float) params.centerFreq)
+                .putFloat("osc_sigma", (float) params.sigma)
+                .apply();
+        });
+
+        padFilter.setOnXYChangedListener((x, y) -> {
+            // Y: Cutoff (30Hz to 15kHz, exponential)
+            params.filterCutoff = 30.0 * Math.pow(500, y);
+            // X: Resonance (0.5 to 4.0) - User requested halving from 8.0
+            params.filterResonance = 0.5 + (x * 3.5);
+            updateValueLabels();
+            syncNativeParams();
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                .putFloat("filter_cutoff", (float) params.filterCutoff)
+                .putFloat("filter_resonance", (float) params.filterResonance)
+                .apply();
+        });
+
         // Initial sync
-        seekCenterFreq.setProgress((int) params.centerFreq);
-        seekSigma.setProgress((int) (params.sigma * 50));
         seekDrive.setProgress((int) (params.drive * 100));
+        
+        // Initial XY Pad positions
+        float freqY = (float) (Math.log10(params.centerFreq / 200.0));
+        float sigmaX = (float) ((params.sigma - 0.1) / 2.9);
+        padOscillator.setValues(sigmaX, freqY);
+
+        float cutoffY = (float) (Math.log(params.filterCutoff / 30.0) / Math.log(500.0));
+        float resX = (float) ((params.filterResonance - 0.5) / 3.5);
+        padFilter.setValues(resX, cutoffY);
+    }
+
+    private void setupAudioPlayerUI() {
+        layoutAudioPlayer = findViewById(R.id.layout_audio_player);
+        ibAudioPlayPause = findViewById(R.id.ib_audio_play_pause);
+        ibAudioStop = findViewById(R.id.ib_audio_stop);
+        tvAudioName = findViewById(R.id.tv_audio_name);
+        tvAudioTime = findViewById(R.id.tv_audio_time);
+        seekAudioPosition = findViewById(R.id.seek_audio_position);
+
+        ibAudioPlayPause.setOnClickListener(v -> toggleAudioPlayback());
+        ibAudioStop.setOnClickListener(v -> stopAudioPlayback());
+
+        seekAudioPosition.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (fromUser && mediaPlayer != null) {
+                    mediaPlayer.seekTo(progress);
+                    tvAudioTime.setText(formatTime(progress) + "/" + formatTime(mediaPlayer.getDuration()));
+                }
+            }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+    }
+
+    private void toggleAudioPlayback() {
+        if (mediaPlayer == null) return;
+        if (mediaPlayer.isPlaying()) {
+            mediaPlayer.pause();
+            ibAudioPlayPause.setImageResource(R.drawable.ic_play);
+            audioHandler.removeCallbacks(audioUpdater);
+        } else {
+            mediaPlayer.start();
+            ibAudioPlayPause.setImageResource(R.drawable.ic_pause);
+            audioHandler.post(audioUpdater);
+        }
+    }
+
+    private void stopAudioPlayback() {
+        if (mediaPlayer != null) {
+            mediaPlayer.pause();
+            mediaPlayer.seekTo(0);
+            ibAudioPlayPause.setImageResource(R.drawable.ic_play);
+            seekAudioPosition.setProgress(0);
+            tvAudioTime.setText(formatTime(0) + "/" + formatTime(mediaPlayer.getDuration()));
+            audioHandler.removeCallbacks(audioUpdater);
+        }
+    }
+
+    private void loadAudio(Uri uri) {
+        if (mediaPlayer != null) {
+            mediaPlayer.release();
+        }
+        try {
+            mediaPlayer = new MediaPlayer();
+            mediaPlayer.setDataSource(this, uri);
+            mediaPlayer.prepare();
+            mediaPlayer.setOnCompletionListener(mp -> {
+                ibAudioPlayPause.setImageResource(R.drawable.ic_play);
+                audioHandler.removeCallbacks(audioUpdater);
+                seekAudioPosition.setProgress(mp.getDuration());
+            });
+
+            String fileName = getFileName(uri);
+            tvAudioName.setText(fileName);
+            seekAudioPosition.setMax(mediaPlayer.getDuration());
+            seekAudioPosition.setProgress(0);
+            tvAudioTime.setText("00:00/" + formatTime(mediaPlayer.getDuration()));
+
+            layoutAudioPlayer.setVisibility(View.VISIBLE);
+            ibAudioPlayPause.setImageResource(R.drawable.ic_play);
+        } catch (Exception e) {
+            Log.e(TAG, "Error loading audio", e);
+            Toast.makeText(this, "Failed to load audio", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private String getFileName(Uri uri) {
+        String result = null;
+        if (uri.getScheme().equals("content")) {
+            try (Cursor cursor = getContentResolver().query(uri, null, null, null, null)) {
+                if (cursor != null && cursor.moveToFirst()) {
+                    int index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                    if (index != -1) result = cursor.getString(index);
+                }
+            }
+        }
+        if (result == null) {
+            result = uri.getPath();
+            int cut = result.lastIndexOf('/');
+            if (cut != -1) result = result.substring(cut + 1);
+        }
+        return result;
+    }
+
+    private String formatTime(int ms) {
+        int seconds = (ms / 1000) % 60;
+        int minutes = (ms / (1000 * 60)) % 60;
+        return String.format("%02d:%02d", minutes, seconds);
     }
 
     private void syncNativeParams() {
@@ -396,7 +541,8 @@ public class MainActivity extends AppCompatActivity {
                 params.modulationRate, params.glideTime);
         NativeAudioEngine.setDrive(params.drive * params.driveLimit);
         NativeAudioEngine.setDelay(params.delayTime, params.delayFeedback, params.delayWet);
-        NativeAudioEngine.setEffectsEnabled(params.isPitchEnabled, params.isModEnabled, params.isDriveEnabled, params.isDelayEnabled);
+        NativeAudioEngine.setFilter(params.filterCutoff, params.filterResonance);
+        NativeAudioEngine.setEffectsEnabled(params.isPitchEnabled, params.isModEnabled, params.isDriveEnabled, params.isDelayEnabled, params.isFilterEnabled);
         NativeAudioEngine.setBufferSize(params.bufferSize);
     }
 
@@ -589,6 +735,7 @@ public class MainActivity extends AppCompatActivity {
         Switch swMod = dialogView.findViewById(R.id.switch_mod_enable);
         Switch swDrive = dialogView.findViewById(R.id.switch_drive_enable);
         Switch swDelay = dialogView.findViewById(R.id.switch_delay_enable);
+        Switch swFilter = dialogView.findViewById(R.id.switch_filter_enable);
 
         TextView labelDriveLimit = dialogView.findViewById(R.id.label_drive_limit);
         SeekBar seekDriveLimit = dialogView.findViewById(R.id.seek_drive_limit);
@@ -724,6 +871,7 @@ public class MainActivity extends AppCompatActivity {
         swMod.setChecked(params.isModEnabled);
         swDrive.setChecked(params.isDriveEnabled);
         swDelay.setChecked(params.isDelayEnabled);
+        swFilter.setChecked(params.isFilterEnabled);
 
         // Update labels initially
         labelBendRange.setText(String.format("Pitch Bend Range: %.1f semitones", params.bendRange));
@@ -754,6 +902,7 @@ public class MainActivity extends AppCompatActivity {
             params.isModEnabled = swMod.isChecked();
             params.isDriveEnabled = swDrive.isChecked();
             params.isDelayEnabled = swDelay.isChecked();
+            params.isFilterEnabled = swFilter.isChecked();
             params.driveLimit = seekDriveLimit.getProgress() / 100.0;
             params.recordingMode = swRecording.isChecked();
 
@@ -773,6 +922,7 @@ public class MainActivity extends AppCompatActivity {
                     .putBoolean("perf_mod_enabled", params.isModEnabled)
                     .putBoolean("perf_drive_enabled", params.isDriveEnabled)
                     .putBoolean("perf_delay_enabled", params.isDelayEnabled)
+                    .putBoolean("perf_filter_enabled", params.isFilterEnabled)
                     .putFloat("perf_drive_limit", (float) params.driveLimit)
                     .putBoolean("perf_fixed_duration", params.fixedDuration)
                     .putFloat("env_attack", (float) params.attackSec)
@@ -840,6 +990,9 @@ public class MainActivity extends AppCompatActivity {
             json.put("gain", params.gain);
             json.put("bufferSize", params.bufferSize);
             json.put("recordingMode", params.recordingMode);
+            json.put("filterCutoff", params.filterCutoff);
+            json.put("filterResonance", params.filterResonance);
+            json.put("isFilterEnabled", params.isFilterEnabled);
 
             SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
             prefs.edit().putString(name, json.toString()).apply();
@@ -848,8 +1001,24 @@ public class MainActivity extends AppCompatActivity {
             Log.e(TAG, "Error saving preset", e);
         }
     }
-
     private void showLoadPresetDialog() {
+        final List<String> options = new ArrayList<>();
+        options.add("Load Audio");
+        options.add("Load Preset");
+
+        new AlertDialog.Builder(this)
+                .setTitle("Select Action")
+                .setItems(options.toArray(new String[0]), (dialog, which) -> {
+                    if (which == 0) {
+                        audioPickerLauncher.launch(new String[]{"audio/*"});
+                    } else {
+                        showPresetSelectionDialog();
+                    }
+                })
+                .show();
+    }
+
+    private void showPresetSelectionDialog() {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         Map<String, ?> allEntries = prefs.getAll();
         final List<String> names = new ArrayList<>();
@@ -891,17 +1060,29 @@ public class MainActivity extends AppCompatActivity {
                 params.gain = json.optDouble("gain", 0.8);
                 params.bufferSize = json.optInt("bufferSize", 256);
 
-                // Sync UI SeekBars
-                if (seekCenterFreq != null)
-                    seekCenterFreq.setProgress((int) params.centerFreq);
-                if (seekSigma != null)
-                    seekSigma.setProgress((int) (params.sigma * 50.0));
-                params.drive = json.optDouble("drive", 0.0);
-                if (seekDrive != null)
-                    seekDrive.setProgress((int) (params.drive * 100.0));
                 params.delayWet = json.optDouble("delayWet", 0.0);
                 params.delayTime = json.optDouble("delayTime", 0.5);
                 params.delayFeedback = json.optDouble("delayFeedback", 0.5);
+                params.filterCutoff = json.optDouble("filterCutoff", 1000.0);
+                params.filterResonance = json.optDouble("filterResonance", 1.0);
+                params.isFilterEnabled = json.optBoolean("isFilterEnabled", true);
+
+                // Update XY Pad positions
+                if (padOscillator != null) {
+                    float freqY = (float) (Math.log10(params.centerFreq / 200.0));
+                    float sigmaX = (float) ((params.sigma - 0.1) / 2.9);
+                    padOscillator.setValues(sigmaX, freqY);
+                }
+                if (padFilter != null) {
+                    float cutoffY = (float) (Math.log(params.filterCutoff / 30.0) / Math.log(500.0));
+                    float resX = (float) ((params.filterResonance - 0.5) / 3.5);
+                    padFilter.setValues(resX, cutoffY);
+                }
+
+                if (seekDrive != null)
+                    seekDrive.setProgress((int) (params.drive * 100.0));
+
+                updateEffectVisibility();
 
                 Toast.makeText(this, "Loaded '" + name + "'", Toast.LENGTH_SHORT).show();
                 regenerateSounds();
@@ -952,6 +1133,11 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        if (mediaPlayer != null) {
+            mediaPlayer.release();
+            mediaPlayer = null;
+        }
+        audioHandler.removeCallbacks(audioUpdater);
         NativeAudioEngine.delete();
     }
 

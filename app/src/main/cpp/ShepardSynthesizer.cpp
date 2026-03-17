@@ -161,8 +161,21 @@ void ShepardSynthesizer::process(float* output, int numFrames) {
             delayBuffer[writeIndex] = sample;
         }
 
-        writeIndex++;
         if (writeIndex >= delayBuffer.size()) writeIndex = 0;
+
+        // Apply Resonant Filter (State Variable Filter)
+        if (filterEnabled) {
+            // Simplified SVF coefficients (assuming cutoff/resonance updated sparingly)
+            // For better performance, pre-calc these in setFilter if sample rate is constant
+            double f = 2.0 * std::sin(M_PI * filterCutoff / kSampleRate);
+            double q = 1.0 / filterResonance;
+            
+            double high = sample - svf_low - q * svf_band;
+            svf_band += f * high;
+            svf_low += f * svf_band;
+            
+            sample = (float)svf_low;
+        }
 
         output[i] = sample;
     }
@@ -285,10 +298,18 @@ void ShepardSynthesizer::setDelay(double time, double feedback, double wet) {
     delayWet = std::max(0.0, std::min(1.0, wet));
 }
 
-void ShepardSynthesizer::setEffectsEnabled(bool p, bool m, bool dr, bool de) {
+void ShepardSynthesizer::setEffectsEnabled(bool p, bool m, bool dr, bool de, bool f) {
     std::lock_guard<std::mutex> lock(voiceMutex);
     pitchEnabled = p;
     modEnabled = m;
     driveEnabled = dr;
     delayEnabled = de;
+    filterEnabled = f;
+}
+
+void ShepardSynthesizer::setFilter(double cutoff, double resonance) {
+    std::lock_guard<std::mutex> lock(voiceMutex);
+    // Limit cutoff to safe range
+    filterCutoff = std::max(20.0, std::min(kSampleRate * 0.45, cutoff));
+    filterResonance = std::max(0.01, std::min(5.0, resonance));
 }

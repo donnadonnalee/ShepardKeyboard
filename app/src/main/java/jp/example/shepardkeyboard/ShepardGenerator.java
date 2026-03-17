@@ -39,7 +39,10 @@ public class ShepardGenerator {
         public boolean isModEnabled = true;
         public boolean isDriveEnabled = true;
         public boolean isDelayEnabled = true;
+        public boolean isFilterEnabled = true;
         public double driveLimit = 1.0;
+        public double filterCutoff = 2000.0;
+        public double filterResonance = 0.707;
     }
 
     public static byte[] generateNote(double frequency, Params params, ProgressListener listener) {
