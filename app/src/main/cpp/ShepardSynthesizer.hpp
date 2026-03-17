@@ -25,6 +25,9 @@ public:
     void setModulation(double depth, double rate);
     void setPitchBend(float bend); // -1.0 to 1.0
     void setFixedDurationMode(bool enabled);
+    void setDrive(double drive);
+    void setDelay(double time, double feedback, double wet);
+    void setEffectsEnabled(bool pitch, bool mod, bool drive, bool delay);
     
     // Updated noteOn to support slides
     void noteOn(int noteIndex, float volume, bool slideFromOld = false, int oldNoteIndex = -1);
@@ -68,6 +71,19 @@ private:
     double lfoPhase = 0.0;
     double modDepth = 0.0; // in semitones
     double modRate = 5.0;  // in Hz
+    double drive = 0.0;    // 0.0 to 1.0
+
+    // Delay parameters
+    double delayTime = 0.5;
+    double delayFeedback = 0.5;
+    double delayWet = 0.0;
+    std::vector<float> delayBuffer;
+    int writeIndex = 0;
+
+    bool pitchEnabled = true;
+    bool modEnabled = true;
+    bool driveEnabled = true;
+    bool delayEnabled = true;
 
     static constexpr double kSampleRate = 48000.0;
     static constexpr double kTwoPi = 6.283185307179586;

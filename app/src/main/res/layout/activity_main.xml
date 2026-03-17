@@ -119,6 +119,7 @@
 
             <!-- Pitch Bend (Vertical) -->
             <LinearLayout
+                android:id="@+id/performance_pitch_container"
                 android:layout_width="60dp"
                 android:layout_height="match_parent"
                 android:gravity="center_horizontal"
@@ -140,8 +141,8 @@
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="BEND" android:textColor="#666666" android:textSize="9sp"/>
             </LinearLayout>
 
-            <!-- Modulation (Vertical) -->
             <LinearLayout
+                android:id="@+id/performance_mod_container"
                 android:layout_width="60dp"
                 android:layout_height="match_parent"
                 android:gravity="center_horizontal"
@@ -162,6 +163,32 @@
                         android:rotation="-90" />
                 </FrameLayout>
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="DEPTH" android:textColor="#666666" android:textSize="9sp"/>
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/performance_drive_container"
+                android:layout_width="60dp"
+                android:layout_height="match_parent"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:layout_marginStart="8dp">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="DRIVE" android:textColor="#FFCC00" android:textSize="9sp" android:textStyle="bold"/>
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1">
+                    <SeekBar
+                        android:id="@+id/seek_drive"
+                        android:layout_width="140dp"
+                        android:layout_height="30dp"
+                        android:max="100"
+                        android:progress="0"
+                        android:layout_gravity="center"
+                        android:rotation="-90"
+                        android:progressTint="#FFCC00"
+                        android:thumbTint="#FFCC00" />
+                </FrameLayout>
+                <TextView android:id="@+id/tv_drive_value" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0%" android:textColor="#666666" android:textSize="9sp"/>
             </LinearLayout>
         </LinearLayout>
 

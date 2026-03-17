@@ -31,6 +31,15 @@ public class ShepardGenerator {
         public double bendSlewRate = 0.95; // 0.0 to 1.0 (higher = slower)
         public double glideTime = 0.1; // seconds
         public boolean isGlideEnabled = false;
+        public double drive = 0.0; // 0.0 to 1.0
+        public double delayTime = 0.5;
+        public double delayFeedback = 0.5;
+        public double delayWet = 0.0;
+        public boolean isPitchEnabled = true;
+        public boolean isModEnabled = true;
+        public boolean isDriveEnabled = true;
+        public boolean isDelayEnabled = true;
+        public double driveLimit = 1.0;
     }
 
     public static byte[] generateNote(double frequency, Params params, ProgressListener listener) {

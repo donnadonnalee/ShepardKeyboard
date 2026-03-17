@@ -9,63 +9,14 @@
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
+        <!-- BUFFER SIZE SECTION -->
         <TextView
-            android:id="@+id/label_bend_range"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Pitch Bend Range (semitones)" />
-        <SeekBar
-            android:id="@+id/seek_bend_range"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:max="6"
-            android:progress="2" />
-
-        <TextView
-            android:id="@+id/label_bend_slew"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Pitch Bend Smoothing"
-            android:layout_marginTop="8dp" />
-        <SeekBar
-            android:id="@+id/seek_bend_slew"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:max="100"
-            android:progress="50" />
-
-        <TextView
-            android:id="@+id/label_modulation_depth"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Max Modulation Depth (semitones)"
-            android:layout_marginTop="8dp" />
-        <SeekBar
-            android:id="@+id/seek_modulation_depth"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:max="200"
-            android:progress="0" />
-
-        <TextView
-            android:id="@+id/label_modulation_rate"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Modulation Rate (Hz)"
-            android:layout_marginTop="8dp" />
-        <SeekBar
-            android:id="@+id/seek_modulation_rate"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:max="200"
-            android:progress="50" />
-
-        <Switch
-            android:id="@+id/switch_mono"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Monophonic Mode"
-            android:layout_marginTop="16dp" />
+            android:text="BUFFER &amp; SYSTEM"
+            android:textColor="#FFCC00"
+            android:textStyle="bold"
+            android:textSize="12sp" />
 
         <TextView
             android:id="@+id/label_buffer_size"
@@ -87,12 +38,58 @@
             android:text="Recording Optimization Mode"
             android:layout_marginTop="8dp" />
 
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#444444"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="8dp" />
+
+        <!-- PITCH BEND SECTION -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:text="PITCH BEND"
+                android:textColor="#FFCC00"
+                android:textStyle="bold"
+                android:textSize="12sp" />
+            <Switch
+                android:id="@+id/switch_pitch_enable"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+
         <TextView
+            android:id="@+id/label_bend_range"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="* Enable this if using screen recording."
-            android:textSize="12sp"
-            android:textColor="#888888" />
+            android:text="Pitch Bend Range (semitones)"
+            android:layout_marginTop="4dp" />
+        <SeekBar
+            android:id="@+id/seek_bend_range"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="6"
+            android:progress="2" />
+
+        <TextView
+            android:id="@+id/label_bend_slew"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Pitch Bend Smoothing"
+            android:layout_marginTop="8dp" />
+        <SeekBar
+            android:id="@+id/seek_bend_slew"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="100"
+            android:progress="50" />
 
         <TextView
             android:id="@+id/label_glide_time"
@@ -107,12 +104,168 @@
             android:max="1000"
             android:progress="100" />
 
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#444444"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="8dp" />
+
+        <!-- MODULATION SECTION -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:text="MODULATION"
+                android:textColor="#FFCC00"
+                android:textStyle="bold"
+                android:textSize="12sp" />
+            <Switch
+                android:id="@+id/switch_mod_enable"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/label_modulation_depth"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Max Modulation Depth (semitones)"
+            android:layout_marginTop="4dp" />
+        <SeekBar
+            android:id="@+id/seek_modulation_depth"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="200"
+            android:progress="0" />
+
+        <TextView
+            android:id="@+id/label_modulation_rate"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Modulation Rate (Hz)"
+            android:layout_marginTop="8dp" />
+        <SeekBar
+            android:id="@+id/seek_modulation_rate"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="200"
+            android:progress="50" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#444444"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="8dp" />
+
+        <!-- OVERDRIVE SECTION -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:text="OVERDRIVE"
+                android:textColor="#FFCC00"
+                android:textStyle="bold"
+                android:textSize="12sp" />
+            <Switch
+                android:id="@+id/switch_drive_enable"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/label_drive_limit"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Overdrive Gain Limit"
+            android:layout_marginTop="4dp" />
+        <SeekBar
+            android:id="@+id/seek_drive_limit"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="100"
+            android:progress="100" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#444444"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="8dp" />
+
+        <!-- DELAY SECTION -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:text="DELAY"
+                android:textColor="#FFCC00"
+                android:textStyle="bold"
+                android:textSize="12sp" />
+            <Switch
+                android:id="@+id/switch_delay_enable"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/label_delay_wet"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Delay Wet (Mix)"
+            android:layout_marginTop="4dp" />
+        <SeekBar
+            android:id="@+id/seek_delay_wet"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="100" />
+
+        <TextView
+            android:id="@+id/label_delay_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Delay Time (ms)"
+            android:layout_marginTop="8dp" />
+        <SeekBar
+            android:id="@+id/seek_delay_time"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="2000" />
+
+        <TextView
+            android:id="@+id/label_delay_feedback"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Delay Feedback"
+            android:layout_marginTop="8dp" />
+        <SeekBar
+            android:id="@+id/seek_delay_feedback"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="95" />
+
         <Button
             android:id="@+id/btn_apply"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Apply and Regenerate"
-            android:layout_marginTop="16dp" />
+            android:text="Apply Changes"
+            android:layout_marginTop="24dp" />
 
     </LinearLayout>
 </ScrollView>

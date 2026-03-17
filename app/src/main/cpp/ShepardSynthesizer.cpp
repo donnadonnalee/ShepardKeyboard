@@ -11,6 +11,8 @@ ShepardSynthesizer::ShepardSynthesizer() {
     for (int i = 0; i < 12; ++i) {
         voices[i].noteIndex = i;
     }
+    // Initialize delay buffer for 2 seconds at 48kHz
+    delayBuffer.resize((int)(kSampleRate * 2.0), 0.0f);
 }
 
 void ShepardSynthesizer::process(float* output, int numFrames) {
@@ -20,16 +22,22 @@ void ShepardSynthesizer::process(float* output, int numFrames) {
         float sample = 0;
         
         // Update LFO for each frame
-        double lfoVal = std::sin(lfoPhase) * modDepth;
-        lfoPhase += (kTwoPi * modRate) / kSampleRate;
-        if (lfoPhase > kTwoPi) lfoPhase -= kTwoPi;
+        double lfoVal = 0;
+        if (modEnabled) {
+            lfoVal = std::sin(lfoPhase) * modDepth;
+            lfoPhase += (kTwoPi * modRate) / kSampleRate;
+            if (lfoPhase > kTwoPi) lfoPhase -= kTwoPi;
+        }
 
         // Pitch bend smoothing (Slew rate limited)
-        // Use a power function to make the high-end of smoothing MUCH more gradual
-        float diff = targetPitchBend - currentPitchBend;
-        float coeff = std::pow(0.1f, (float)bendSlewRate * 5.0f); // coefficient gets very small
-        if (bendSlewRate <= 0.05) coeff = 1.0f; // almost instant at low settings
-        currentPitchBend += diff * coeff;
+        if (pitchEnabled) {
+            float diff = targetPitchBend - currentPitchBend;
+            float coeff = std::pow(0.1f, (float)bendSlewRate * 5.0f); // coefficient gets very small
+            if (bendSlewRate <= 0.05) coeff = 1.0f; // almost instant at low settings
+            currentPitchBend += diff * coeff;
+        } else {
+            currentPitchBend = 0;
+        }
 
         for (auto& v : voices) {
             if (!v.active && v.envelope <= 0) continue;
@@ -126,6 +134,36 @@ void ShepardSynthesizer::process(float* output, int numFrames) {
 
             sample += (float)(voiceSample * v.envelope * v.volume * 0.05); // Lower gain for summing many octaves
         }
+
+        // Apply Overdrive (Soft clipping - Enhanced)
+        if (driveEnabled && drive > 0) {
+            // Increased multiplier for "Gyan Gyan" distortion
+            float preGain = 1.0f + (float)drive * 40.0f; 
+            sample *= preGain;
+            // Soft clipping using tanh-like curve: x / (1 + |x|)
+            sample = sample / (1.0f + std::abs(sample));
+        }
+
+        // Apply Delay
+        if (delayEnabled && delayWet > 0) {
+            int delaySamples = (int)(delayTime * kSampleRate);
+            int readIndex = writeIndex - delaySamples;
+            if (readIndex < 0) readIndex += delayBuffer.size();
+
+            float delayedSample = delayBuffer[readIndex];
+            
+            // Mix delay back into buffer with feedback
+            delayBuffer[writeIndex] = sample + delayedSample * (float)delayFeedback;
+            
+            // Output mix
+            sample = sample * (1.0f - (float)delayWet) + delayedSample * (float)delayWet;
+        } else {
+            delayBuffer[writeIndex] = sample;
+        }
+
+        writeIndex++;
+        if (writeIndex >= delayBuffer.size()) writeIndex = 0;
+
         output[i] = sample;
     }
 }
@@ -233,4 +271,24 @@ void ShepardSynthesizer::setPerformanceParams(double br, double bs, double md, d
 void ShepardSynthesizer::setFixedDurationMode(bool enabled) {
     std::lock_guard<std::mutex> lock(voiceMutex);
     fixedDurationMode = enabled;
+}
+
+void ShepardSynthesizer::setDrive(double d) {
+    std::lock_guard<std::mutex> lock(voiceMutex);
+    drive = d;
+}
+
+void ShepardSynthesizer::setDelay(double time, double feedback, double wet) {
+    std::lock_guard<std::mutex> lock(voiceMutex);
+    delayTime = std::max(0.01, std::min(2.0, time));
+    delayFeedback = std::max(0.0, std::min(0.95, feedback));
+    delayWet = std::max(0.0, std::min(1.0, wet));
+}
+
+void ShepardSynthesizer::setEffectsEnabled(bool p, bool m, bool dr, bool de) {
+    std::lock_guard<std::mutex> lock(voiceMutex);
+    pitchEnabled = p;
+    modEnabled = m;
+    driveEnabled = dr;
+    delayEnabled = de;
 }

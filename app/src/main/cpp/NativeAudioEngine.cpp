@@ -60,6 +60,9 @@ public:
     void setModulation(double d, double r) { synth->setModulation(d, r); }
     void setPitchBend(float b) { synth->setPitchBend(b); }
     void setFixedDurationMode(bool enabled) { synth->setFixedDurationMode(enabled); }
+    void setDrive(double d) { synth->setDrive(d); }
+    void setDelay(double t, double f, double w) { synth->setDelay(t, f, w); }
+    void setEffectsEnabled(bool p, bool m, bool dr, bool de) { synth->setEffectsEnabled(p, m, dr, de); }
     void setRecordingMode(bool enabled) {
         if (recordingMode != enabled) {
             __android_log_print(ANDROID_LOG_INFO, TAG, "Restarting stream for RecordingMode=%s", enabled ? "ON" : "OFF");
@@ -149,6 +152,21 @@ Java_jp_example_shepardkeyboard_NativeAudioEngine_setModulation(JNIEnv *env, jcl
 JNIEXPORT void JNICALL
 Java_jp_example_shepardkeyboard_NativeAudioEngine_setPitchBend(JNIEnv *env, jclass clazz, jfloat bend) {
     if (engine) engine->setPitchBend(bend);
+}
+
+JNIEXPORT void JNICALL
+Java_jp_example_shepardkeyboard_NativeAudioEngine_setDrive(JNIEnv *env, jclass clazz, jdouble drive) {
+    if (engine) engine->setDrive(drive);
+}
+
+JNIEXPORT void JNICALL
+Java_jp_example_shepardkeyboard_NativeAudioEngine_setDelay(JNIEnv *env, jclass clazz, jdouble time, jdouble feedback, jdouble wet) {
+    if (engine) engine->setDelay(time, feedback, wet);
+}
+
+JNIEXPORT void JNICALL
+Java_jp_example_shepardkeyboard_NativeAudioEngine_setEffectsEnabled(JNIEnv *env, jclass clazz, jboolean pitch, jboolean mod, jboolean drive, jboolean delay) {
+    if (engine) engine->setEffectsEnabled(pitch, mod, drive, delay);
 }
 
 JNIEXPORT void JNICALL

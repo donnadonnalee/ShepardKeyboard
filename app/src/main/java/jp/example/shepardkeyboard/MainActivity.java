@@ -59,6 +59,8 @@ public class MainActivity extends AppCompatActivity {
     private SeekBar seekModulation;
     private SeekBar seekCenterFreq;
     private SeekBar seekSigma;
+    private SeekBar seekDrive;
+    private TextView tvDriveValue;
     private final Map<Integer, Integer> activePointers = new HashMap<>();
     private final Map<View, Integer> viewToNote = new HashMap<>();
 
@@ -81,6 +83,15 @@ public class MainActivity extends AppCompatActivity {
         params.decaySec = globalPrefs.getFloat("env_decay", 0.1f);
         params.sustainLevel = globalPrefs.getFloat("env_sustain_level", 0.7f);
         params.releaseSec = globalPrefs.getFloat("env_release", 0.5f);
+        params.drive = globalPrefs.getFloat("perf_drive", 0.0f);
+        params.delayTime = globalPrefs.getFloat("perf_delay_time", 0.5f);
+        params.delayFeedback = globalPrefs.getFloat("perf_delay_feedback", 0.5f);
+        params.delayWet = globalPrefs.getFloat("perf_delay_wet", 0.0f);
+        params.isPitchEnabled = globalPrefs.getBoolean("perf_pitch_enabled", true);
+        params.isModEnabled = globalPrefs.getBoolean("perf_mod_enabled", true);
+        params.isDriveEnabled = globalPrefs.getBoolean("perf_drive_enabled", true);
+        params.isDelayEnabled = globalPrefs.getBoolean("perf_delay_enabled", true);
+        params.driveLimit = globalPrefs.getFloat("perf_drive_limit", 1.0f);
 
         NativeAudioEngine.create(params.recordingMode);
         NativeAudioEngine.setFixedDurationMode(params.fixedDuration);
@@ -132,7 +143,21 @@ public class MainActivity extends AppCompatActivity {
 
         initDefaultPresets();
         updateValueLabels();
+        updateEffectVisibility();
         syncNativeParams();
+    }
+
+    private void updateEffectVisibility() {
+        View pitchContainer = findViewById(R.id.performance_pitch_container);
+        View modContainer = findViewById(R.id.performance_mod_container);
+        View driveContainer = findViewById(R.id.performance_drive_container);
+
+        if (pitchContainer != null)
+            pitchContainer.setVisibility(params.isPitchEnabled ? View.VISIBLE : View.GONE);
+        if (modContainer != null)
+            modContainer.setVisibility(params.isModEnabled ? View.VISIBLE : View.GONE);
+        if (driveContainer != null)
+            driveContainer.setVisibility(params.isDriveEnabled ? View.VISIBLE : View.GONE);
     }
 
     private void updateValueLabels() {
@@ -144,6 +169,8 @@ public class MainActivity extends AppCompatActivity {
             tvCenter.setText(String.format("%.0fHz", params.centerFreq));
         if (tvSigmaLabel != null)
             tvSigmaLabel.setText(String.format("%.2f", params.sigma));
+        if (tvDriveValue != null)
+            tvDriveValue.setText(String.format("%d%%", (int)(params.drive * 100)));
         if (tvEnv != null) {
             tvEnv.setText(String.format("A:%.2f D:%.2f S:%.2f R:%.2f",
                     params.attackSec, params.decaySec, params.sustainLevel, params.releaseSec));
@@ -154,25 +181,27 @@ public class MainActivity extends AppCompatActivity {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         int presetVersion = prefs.getInt("preset_version", 0);
 
-        if (presetVersion < 1) {
+        if (presetVersion < 2) {
             // Standard: Balanced sound
-            savePresetInternal("Standard", 0.05, 0.1, 0.7, 0.5, 1.0, 600.0, 1.0);
+            savePresetInternal("Standard", 0.05, 0.1, 0.7, 0.5, 1.0, 600.0, 1.0, 0.0, 0.5, 0.5, 0.0);
             // Twinkle: High frequency, sharp attack, short decay/release
-            savePresetInternal("Twinkle", 0.01, 0.5, 0.5, 0.4, 0.2, 2000.0, 1.5);
+            savePresetInternal("Twinkle", 0.01, 0.5, 0.5, 0.4, 0.2, 2000.0, 1.5, 0.0, 0.5, 0.5, 0.0);
             // Moan: Low frequency, slow attack, long release
-            savePresetInternal("Moan", 0.5, 0.5, 0.8, 2.0, 1.0, 150.0, 0.5);
+            savePresetInternal("Moan", 0.5, 0.5, 0.8, 2.0, 1.0, 150.0, 0.5, 0.0, 0.5, 0.5, 0.0);
             // Pulsar: Medium frequency, very sharp, very short
-            savePresetInternal("Pulsar", 0, 0.05, 0.1, 0.1, 0.1, 440.0, 1.4);
+            savePresetInternal("Pulsar", 0, 0.05, 0.1, 0.1, 0.1, 440.0, 1.4, 0.0, 0.5, 0.5, 0.0);
             // Nebula: Wide spectrum, very slow attack, long sustain/release
-            savePresetInternal("Nebula", 1.5, 2.0, 0.9, 3.0, 2.0, 300.0, 2.5);
+            savePresetInternal("Nebula", 1.5, 2.0, 0.9, 3.0, 2.0, 300.0, 2.5, 0.0, 0.8, 0.7, 0.3);
+            // Overdrive: High drive, sharp attack
+            savePresetInternal("Overdrive", 0.01, 0.1, 0.7, 0.5, 1.0, 440.0, 1.0, 0.9, 0.5, 0.5, 0.0);
 
-            prefs.edit().putInt("preset_version", 1).apply();
+            prefs.edit().putInt("preset_version", 2).apply();
         }
     }
 
     private void savePresetInternal(String name, double attack, double decay, double sustainL, double release,
             double duration, double center,
-            double sigma) {
+            double sigma, double drive, double dTime, double dFeedback, double dWet) {
         try {
             JSONObject json = new JSONObject();
             json.put("attack", attack);
@@ -182,6 +211,10 @@ public class MainActivity extends AppCompatActivity {
             json.put("duration", duration);
             json.put("centerFreq", center);
             json.put("sigma", sigma);
+            json.put("drive", drive);
+            json.put("delayTime", dTime);
+            json.put("delayFeedback", dFeedback);
+            json.put("delayWet", dWet);
             json.put("gain", 0.8);
 
             SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
@@ -329,9 +362,30 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        seekDrive = findViewById(R.id.seek_drive);
+        tvDriveValue = findViewById(R.id.tv_drive_value);
+        seekDrive.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                params.drive = progress / 100.0;
+                if (tvDriveValue != null) tvDriveValue.setText(progress + "%");
+                NativeAudioEngine.setDrive(params.drive * params.driveLimit);
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putFloat("perf_drive", (float) params.drive).apply();
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
+        });
+
         // Initial sync
         seekCenterFreq.setProgress((int) params.centerFreq);
         seekSigma.setProgress((int) (params.sigma * 50));
+        seekDrive.setProgress((int) (params.drive * 100));
     }
 
     private void syncNativeParams() {
@@ -340,6 +394,9 @@ public class MainActivity extends AppCompatActivity {
                 params.releaseSec, params.centerFreq, params.sigma);
         NativeAudioEngine.setPerformanceParams(params.bendRange, params.bendSlewRate, scaledModDepth,
                 params.modulationRate, params.glideTime);
+        NativeAudioEngine.setDrive(params.drive * params.driveLimit);
+        NativeAudioEngine.setDelay(params.delayTime, params.delayFeedback, params.delayWet);
+        NativeAudioEngine.setEffectsEnabled(params.isPitchEnabled, params.isModEnabled, params.isDriveEnabled, params.isDelayEnabled);
         NativeAudioEngine.setBufferSize(params.bufferSize);
     }
 
@@ -521,9 +578,21 @@ public class MainActivity extends AppCompatActivity {
         TextView labelGlideTime = dialogView.findViewById(R.id.label_glide_time);
         SeekBar seekGlideTime = dialogView.findViewById(R.id.seek_glide_time);
 
-        View monoSwitch = dialogView.findViewById(R.id.switch_mono);
-        if (monoSwitch != null)
-            monoSwitch.setVisibility(View.GONE);
+        TextView labelDelayWet = dialogView.findViewById(R.id.label_delay_wet);
+        SeekBar seekDelayWet = dialogView.findViewById(R.id.seek_delay_wet);
+        TextView labelDelayTime = dialogView.findViewById(R.id.label_delay_time);
+        SeekBar seekDelayTime = dialogView.findViewById(R.id.seek_delay_time);
+        TextView labelDelayFeedback = dialogView.findViewById(R.id.label_delay_feedback);
+        SeekBar seekDelayFeedback = dialogView.findViewById(R.id.seek_delay_feedback);
+
+        Switch swPitch = dialogView.findViewById(R.id.switch_pitch_enable);
+        Switch swMod = dialogView.findViewById(R.id.switch_mod_enable);
+        Switch swDrive = dialogView.findViewById(R.id.switch_drive_enable);
+        Switch swDelay = dialogView.findViewById(R.id.switch_delay_enable);
+
+        TextView labelDriveLimit = dialogView.findViewById(R.id.label_drive_limit);
+        SeekBar seekDriveLimit = dialogView.findViewById(R.id.seek_drive_limit);
+
 
         Switch swRecording = dialogView.findViewById(R.id.switch_recording_mode);
         swRecording.setChecked(params.recordingMode);
@@ -607,6 +676,38 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        seekDelayWet.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                labelDelayWet.setText(String.format("Delay Wet (Mix): %d%%", progress));
+            }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+
+        seekDelayTime.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                labelDelayTime.setText(String.format("Delay Time (ms): %d", progress));
+            }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+
+        seekDelayFeedback.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                labelDelayFeedback.setText(String.format("Delay Feedback: %d%%", progress));
+            }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+
+        seekDriveLimit.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                labelDriveLimit.setText(String.format("Overdrive Gain Limit: %d%%", progress));
+            }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+
         // Set initial progress
         seekBendRange.setProgress((int) (params.bendRange * 2));
         seekBendSlew.setProgress((int) (params.bendSlewRate * 100));
@@ -614,6 +715,15 @@ public class MainActivity extends AppCompatActivity {
         seekModRate.setProgress((int) (params.modulationRate * 10));
         seekBufferSize.setProgress(params.bufferSize);
         seekGlideTime.setProgress((int) (params.glideTime * 1000));
+        seekDelayWet.setProgress((int) (params.delayWet * 100));
+        seekDelayTime.setProgress((int) (params.delayTime * 1000));
+        seekDelayFeedback.setProgress((int) (params.delayFeedback * 100));
+        seekDriveLimit.setProgress((int) (params.driveLimit * 100));
+
+        swPitch.setChecked(params.isPitchEnabled);
+        swMod.setChecked(params.isModEnabled);
+        swDrive.setChecked(params.isDriveEnabled);
+        swDelay.setChecked(params.isDelayEnabled);
 
         // Update labels initially
         labelBendRange.setText(String.format("Pitch Bend Range: %.1f semitones", params.bendRange));
@@ -621,6 +731,10 @@ public class MainActivity extends AppCompatActivity {
         labelModDepth.setText(String.format("Max Modulation Depth: %.1f semitones", params.modulationDepth));
         labelModRate.setText(String.format("Modulation Rate: %.1f Hz", params.modulationRate));
         labelBufferSize.setText(String.format("Buffer Size (Frames): %d", params.bufferSize));
+        labelDelayWet.setText(String.format("Delay Wet (Mix): %d%%", (int)(params.delayWet * 100)));
+        labelDelayTime.setText(String.format("Delay Time: %d ms", (int)(params.delayTime * 1000)));
+        labelDelayFeedback.setText(String.format("Delay Feedback: %d%%", (int)(params.delayFeedback * 100)));
+        labelDriveLimit.setText(String.format("Overdrive Gain Limit: %d%%", (int)(params.driveLimit * 100)));
 
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setView(dialogView)
@@ -633,6 +747,14 @@ public class MainActivity extends AppCompatActivity {
             params.modulationRate = seekModRate.getProgress() / 10.0;
             params.bufferSize = Math.max(64, seekBufferSize.getProgress());
             params.glideTime = seekGlideTime.getProgress() / 1000.0;
+            params.delayWet = seekDelayWet.getProgress() / 100.0;
+            params.delayTime = seekDelayTime.getProgress() / 1000.0;
+            params.delayFeedback = seekDelayFeedback.getProgress() / 100.0;
+            params.isPitchEnabled = swPitch.isChecked();
+            params.isModEnabled = swMod.isChecked();
+            params.isDriveEnabled = swDrive.isChecked();
+            params.isDelayEnabled = swDelay.isChecked();
+            params.driveLimit = seekDriveLimit.getProgress() / 100.0;
             params.recordingMode = swRecording.isChecked();
 
             NativeAudioEngine.setRecordingMode(params.recordingMode);
@@ -644,13 +766,23 @@ public class MainActivity extends AppCompatActivity {
                     .putFloat("perf_mod_rate", (float) params.modulationRate)
                     .putInt("perf_buffer_size", params.bufferSize)
                     .putFloat("perf_glide_time", (float) params.glideTime)
+                    .putFloat("perf_delay_wet", (float) params.delayWet)
+                    .putFloat("perf_delay_time", (float) params.delayTime)
+                    .putFloat("perf_delay_feedback", (float) params.delayFeedback)
+                    .putBoolean("perf_pitch_enabled", params.isPitchEnabled)
+                    .putBoolean("perf_mod_enabled", params.isModEnabled)
+                    .putBoolean("perf_drive_enabled", params.isDriveEnabled)
+                    .putBoolean("perf_delay_enabled", params.isDelayEnabled)
+                    .putFloat("perf_drive_limit", (float) params.driveLimit)
                     .putBoolean("perf_fixed_duration", params.fixedDuration)
                     .putFloat("env_attack", (float) params.attackSec)
                     .putFloat("env_decay", (float) params.decaySec)
                     .putFloat("env_sustain_level", (float) params.sustainLevel)
                     .putFloat("env_release", (float) params.releaseSec)
+                    .putFloat("perf_drive", (float) params.drive)
                     .apply();
 
+            updateEffectVisibility();
             syncNativeParams();
             dialog.dismiss();
         });
@@ -701,6 +833,10 @@ public class MainActivity extends AppCompatActivity {
             json.put("duration", params.durationSec);
             json.put("centerFreq", params.centerFreq);
             json.put("sigma", params.sigma);
+            json.put("drive", params.drive);
+            json.put("delayWet", params.delayWet);
+            json.put("delayTime", params.delayTime);
+            json.put("delayFeedback", params.delayFeedback);
             json.put("gain", params.gain);
             json.put("bufferSize", params.bufferSize);
             json.put("recordingMode", params.recordingMode);
@@ -760,6 +896,12 @@ public class MainActivity extends AppCompatActivity {
                     seekCenterFreq.setProgress((int) params.centerFreq);
                 if (seekSigma != null)
                     seekSigma.setProgress((int) (params.sigma * 50.0));
+                params.drive = json.optDouble("drive", 0.0);
+                if (seekDrive != null)
+                    seekDrive.setProgress((int) (params.drive * 100.0));
+                params.delayWet = json.optDouble("delayWet", 0.0);
+                params.delayTime = json.optDouble("delayTime", 0.5);
+                params.delayFeedback = json.optDouble("delayFeedback", 0.5);
 
                 Toast.makeText(this, "Loaded '" + name + "'", Toast.LENGTH_SHORT).show();
                 regenerateSounds();
