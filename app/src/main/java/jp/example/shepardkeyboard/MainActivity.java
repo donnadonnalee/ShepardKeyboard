@@ -873,6 +873,17 @@ public class MainActivity extends AppCompatActivity {
         swDelay.setChecked(params.isDelayEnabled);
         swFilter.setChecked(params.isFilterEnabled);
 
+        // Dynamic visibility logic
+        View[] pitchViews = {labelBendRange, seekBendRange, labelBendSlew, seekBendSlew, labelGlideTime, seekGlideTime};
+        View[] modViews = {labelModDepth, seekModDepth, labelModRate, seekModRate};
+        View[] driveViews = {labelDriveLimit, seekDriveLimit};
+        View[] delayViews = {labelDelayWet, seekDelayWet, labelDelayTime, seekDelayTime, labelDelayFeedback, seekDelayFeedback};
+
+        autoToggleVisibility(swPitch, pitchViews);
+        autoToggleVisibility(swMod, modViews);
+        autoToggleVisibility(swDrive, driveViews);
+        autoToggleVisibility(swDelay, delayViews);
+
         // Update labels initially
         labelBendRange.setText(String.format("Pitch Bend Range: %.1f semitones", params.bendRange));
         labelBendSlew.setText(String.format("Pitch Bend Smoothing: %d%%", (int) (params.bendSlewRate * 100)));
@@ -938,6 +949,15 @@ public class MainActivity extends AppCompatActivity {
         });
 
         dialog.show();
+    }
+
+    private void autoToggleVisibility(Switch sw, View[] views) {
+        // Initial state
+        for (View v : views) v.setVisibility(sw.isChecked() ? View.VISIBLE : View.GONE);
+        // Listener
+        sw.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            for (View v : views) v.setVisibility(isChecked ? View.VISIBLE : View.GONE);
+        });
     }
 
     private SeekBar.OnSeekBarChangeListener createSeekListener(TextView label, String format) {
