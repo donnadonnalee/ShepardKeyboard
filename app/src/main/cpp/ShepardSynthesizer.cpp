@@ -174,18 +174,31 @@ void ShepardSynthesizer::process(float* output, int numFrames) {
 
         if (writeIndex >= delayBuffer.size()) writeIndex = 0;
 
-        // Apply Resonant Filter (State Variable Filter)
+        // Apply Resonant Filter (Trapezoidal SVF - Andrew Simper)
         if (filterEnabled) {
-            // Simplified SVF coefficients (assuming cutoff/resonance updated sparingly)
-            // For better performance, pre-calc these in setFilter if sample rate is constant
-            double f = 2.0 * std::sin(M_PI * filterCutoff / kSampleRate);
-            double q = 1.0 / filterResonance;
+            // Parameter smoothing
+            currentFilterCutoff += (filterCutoff - currentFilterCutoff) * 0.01;
+            currentFilterResonance += (filterResonance - currentFilterResonance) * 0.01;
+
+            double g = std::tan(M_PI * currentFilterCutoff / kSampleRate);
+            double k = 1.0 / std::max(0.1, currentFilterResonance);
+            double a1 = 1.0 / (1.0 + g * (g + k));
+            double a2 = g * a1;
+            double a3 = g * a2;
+
+            double v3 = sample - z2;
+            double v1 = a1 * z1 + a2 * v3;
+            double v2 = z2 + a2 * z1 + a3 * v3;
+            z1 = 2.0 * v1 - z1;
+            z2 = 2.0 * v2 - z2;
             
-            double high = sample - svf_low - q * svf_band;
-            svf_band += f * high;
-            svf_low += f * svf_band;
+            // Check for NaN/Inf stability and reset if necessary
+            if (!(std::isfinite(z1) && std::isfinite(z2))) {
+                z1 = 0.0;
+                z2 = 0.0;
+            }
             
-            sample = (float)svf_low;
+            sample = (float)v2; // v2 is the Lowpass output
         }
 
         output[i] = sample;
@@ -320,9 +333,9 @@ void ShepardSynthesizer::setEffectsEnabled(bool p, bool m, bool dr, bool de, boo
 
 void ShepardSynthesizer::setFilter(double cutoff, double resonance) {
     std::lock_guard<std::mutex> lock(voiceMutex);
-    // Limit cutoff to safe range
-    filterCutoff = std::max(20.0, std::min(kSampleRate * 0.45, cutoff));
-    filterResonance = std::max(0.01, std::min(5.0, resonance));
+    // Limit cutoff to safe range for basic SVF
+    filterCutoff = std::max(20.0, std::min(kSampleRate * 0.35, cutoff));
+    filterResonance = std::max(0.1, std::min(5.0, resonance));
 }
 
 void ShepardSynthesizer::setOctaveOffset(float offset) {

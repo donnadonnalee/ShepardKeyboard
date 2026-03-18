@@ -45,6 +45,7 @@ public class ShepardGenerator {
         public double filterResonance = 0.707;
         public boolean isOctaveEnabled = true;
         public double octaveSlewRate = 0.5;
+        public int verticalControlParam = 0; // 0: Vol, 1: Mod, 2: LPF
     }
 
     public static byte[] generateNote(double frequency, Params params, ProgressListener listener) {

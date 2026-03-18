@@ -9,6 +9,51 @@
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
+        <!-- KEYBOARD VERTICAL CONTROL -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="KEYBOARD VERTICAL CONTROL"
+            android:textColor="#FFCC00"
+            android:textStyle="bold"
+            android:textSize="12sp" />
+
+        <RadioGroup
+            android:id="@+id/rg_vertical_control"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="8dp">
+            <RadioButton
+                android:id="@+id/rb_vertical_volume"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:text="Volume"
+                android:textSize="12sp" />
+            <RadioButton
+                android:id="@+id/rb_vertical_modulation"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:text="Modulation"
+                android:textSize="12sp" />
+            <RadioButton
+                android:id="@+id/rb_vertical_lpf"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:text="LPF"
+                android:textSize="12sp" />
+        </RadioGroup>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#444444"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="8dp" />
+
         <!-- BUFFER SIZE SECTION -->
         <TextView
             android:layout_width="wrap_content"

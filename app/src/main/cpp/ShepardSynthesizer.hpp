@@ -96,8 +96,10 @@ private:
     // Filter parameters & state (State Variable Filter)
     double filterCutoff = 20000.0;
     double filterResonance = 0.707;
-    double svf_low = 0.0;
-    double svf_band = 0.0;
+    double currentFilterCutoff = 20000.0;
+    double currentFilterResonance = 0.707;
+    double z1 = 0.0;
+    double z2 = 0.0;
     static constexpr double kSampleRate = 48000.0;
     static constexpr double kTwoPi = 6.283185307179586;
 };

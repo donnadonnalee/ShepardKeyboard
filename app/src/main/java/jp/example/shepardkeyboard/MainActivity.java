@@ -26,6 +26,8 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ProgressBar;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.SeekBar;
 import android.widget.Switch;
 import android.widget.TextView;
@@ -129,6 +131,7 @@ public class MainActivity extends AppCompatActivity {
         params.filterResonance = globalPrefs.getFloat("filter_resonance", 1.0f);
         params.isOctaveEnabled = globalPrefs.getBoolean("perf_octave_enabled", true);
         params.octaveSlewRate = globalPrefs.getFloat("perf_octave_slew", 0.5f);
+        params.verticalControlParam = globalPrefs.getInt("perf_vertical_control", 0);
 
         NativeAudioEngine.create(params.recordingMode);
         NativeAudioEngine.setFixedDurationMode(params.fixedDuration);
@@ -601,13 +604,25 @@ public class MainActivity extends AppCompatActivity {
             switch (actionMasked) {
                 case MotionEvent.ACTION_DOWN:
                 case MotionEvent.ACTION_POINTER_DOWN:
+                    // For DOWN, we just handle the new pointer (it might be the highest)
+                    for (int i = 0; i < event.getPointerCount(); i++) {
+                        float ty = event.getY(i);
+                        // We recalculate highest for all pointers even on DOWN to be safe
+                    }
+                    // Fall through to MOVE logic which handles all pointers
                 case MotionEvent.ACTION_MOVE:
                     // For ACTION_MOVE, we need to check all active pointers
+                    float minY = Float.MAX_VALUE;
+                    for (int i = 0; i < event.getPointerCount(); i++) {
+                        float y = event.getY(i);
+                        if (y < minY) minY = y;
+                    }
+
                     for (int i = 0; i < event.getPointerCount(); i++) {
                         int pid = event.getPointerId(i);
                         float x = event.getX(i);
                         float y = event.getY(i);
-                        handleTouch(container, pid, x, y, blackKeys, whiteKeys, viewToNote);
+                        handleTouch(container, pid, x, y, blackKeys, whiteKeys, viewToNote, y == minY);
                     }
                     break;
                 case MotionEvent.ACTION_UP:
@@ -622,7 +637,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void handleTouch(View container, int pointerId, float x, float y, List<View> blackKeys,
-            List<View> whiteKeys, Map<View, Integer> viewToNote) {
+            List<View> whiteKeys, Map<View, Integer> viewToNote, boolean isHighest) {
         View targetKey = null;
 
         // Check black keys first (top layer)
@@ -647,11 +662,27 @@ public class MainActivity extends AppCompatActivity {
             int newNoteIndex = viewToNote.get(targetKey);
             int transposedNote = (newNoteIndex + transposeOffset + 12) % 12;
 
-            float volume = y / targetKey.getHeight(); // This Y is relative to container, needs to be relative to key
-            // Correcting volume calculation for container-level touch
             float relativeY = y - targetKey.getTop();
-            volume = relativeY / targetKey.getHeight();
-            volume = Math.max(0.01f, Math.min(1.0f, volume));
+            float normY = relativeY / targetKey.getHeight();
+            normY = Math.max(0.0f, Math.min(1.0f, normY));
+
+            float volume = 1.0f;
+            if (params.verticalControlParam == 0) {
+                // Volume: Higher = smaller
+                volume = normY;
+                volume = Math.max(0.01f, volume);
+            } else if (params.verticalControlParam == 1 && isHighest) {
+                // Modulation: Higher = stronger
+                float modRaw = 1.0f - normY;
+                double scaledDepth = modRaw * params.modulationDepth;
+                NativeAudioEngine.setModulation(scaledDepth, params.modulationRate);
+            } else if (params.verticalControlParam == 2 && isHighest) {
+                // LPF: Higher = higher cutoff
+                float lpfRaw = 1.0f - normY;
+                // Sweep log from 100Hz to 15kHz
+                double cutoff = 100.0 * Math.pow(150.0, lpfRaw);
+                NativeAudioEngine.setFilter(cutoff, params.filterResonance);
+            }
 
             if (lastNote == null || lastNote != transposedNote) {
                 if (lastNote != null) {
@@ -772,6 +803,11 @@ public class MainActivity extends AppCompatActivity {
 
         Switch swRecording = dialogView.findViewById(R.id.switch_recording_mode);
         swRecording.setChecked(params.recordingMode);
+
+        RadioGroup rgVerticalControl = dialogView.findViewById(R.id.rg_vertical_control);
+        if (params.verticalControlParam == 0) rgVerticalControl.check(R.id.rb_vertical_volume);
+        else if (params.verticalControlParam == 1) rgVerticalControl.check(R.id.rb_vertical_modulation);
+        else if (params.verticalControlParam == 2) rgVerticalControl.check(R.id.rb_vertical_lpf);
 
         Button btnApply = dialogView.findViewById(R.id.btn_apply);
 
@@ -963,6 +999,11 @@ public class MainActivity extends AppCompatActivity {
             params.octaveSlewRate = seekOctaveSlew.getProgress() / 100.0;
             params.recordingMode = swRecording.isChecked();
 
+            int checkedId = rgVerticalControl.getCheckedRadioButtonId();
+            if (checkedId == R.id.rb_vertical_volume) params.verticalControlParam = 0;
+            else if (checkedId == R.id.rb_vertical_modulation) params.verticalControlParam = 1;
+            else if (checkedId == R.id.rb_vertical_lpf) params.verticalControlParam = 2;
+
             NativeAudioEngine.setRecordingMode(params.recordingMode);
             getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                     .putBoolean("global_recording_mode", params.recordingMode)
@@ -989,6 +1030,7 @@ public class MainActivity extends AppCompatActivity {
                     .putFloat("perf_drive", (float) params.drive)
                     .putBoolean("perf_octave_enabled", params.isOctaveEnabled)
                     .putFloat("perf_octave_slew", (float) params.octaveSlewRate)
+                    .putInt("perf_vertical_control", params.verticalControlParam)
                     .apply();
 
             updateEffectVisibility();
