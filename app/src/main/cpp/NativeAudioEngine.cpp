@@ -64,6 +64,8 @@ public:
     void setDelay(double t, double f, double w) { synth->setDelay(t, f, w); }
     void setFilter(double c, double r) { synth->setFilter(c, r); }
     void setEffectsEnabled(bool p, bool m, bool dr, bool de, bool f) { synth->setEffectsEnabled(p, m, dr, de, f); }
+    void setOctaveOffset(float o) { synth->setOctaveOffset(o); }
+    void setOctaveSlewRate(double s) { synth->setOctaveSlewRate(s); }
     void setRecordingMode(bool enabled) {
         if (recordingMode != enabled) {
             __android_log_print(ANDROID_LOG_INFO, TAG, "Restarting stream for RecordingMode=%s", enabled ? "ON" : "OFF");
@@ -173,6 +175,16 @@ Java_jp_example_shepardkeyboard_NativeAudioEngine_setEffectsEnabled(JNIEnv *env,
 JNIEXPORT void JNICALL
 Java_jp_example_shepardkeyboard_NativeAudioEngine_setFilter(JNIEnv *env, jclass clazz, jdouble cutoff, jdouble resonance) {
     if (engine) engine->setFilter(cutoff, resonance);
+}
+
+JNIEXPORT void JNICALL
+Java_jp_example_shepardkeyboard_NativeAudioEngine_setOctaveOffset(JNIEnv *env, jclass clazz, jfloat offset) {
+    if (engine) engine->setOctaveOffset(offset);
+}
+
+JNIEXPORT void JNICALL
+Java_jp_example_shepardkeyboard_NativeAudioEngine_setOctaveSlewRate(JNIEnv *env, jclass clazz, jfloat slew_rate) {
+    if (engine) engine->setOctaveSlewRate(slew_rate);
 }
 
 JNIEXPORT void JNICALL

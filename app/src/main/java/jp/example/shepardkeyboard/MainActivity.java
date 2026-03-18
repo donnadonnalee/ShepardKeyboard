@@ -62,7 +62,7 @@ public class MainActivity extends AppCompatActivity {
     private InterstitialAd mInterstitialAd;
 
     // Real-time Controls
-    private SeekBar seekPitchBend, seekModulation, seekDrive;
+    private SeekBar seekPitchBend, seekModulation, seekDrive, seekOctaveJump;
     private XYPadView padOscillator, padFilter;
     private TextView tvCenterFreq, tvSigma, tvDriveValue, tvFilterCutoff, tvFilterResonance;
     private final Map<Integer, Integer> activePointers = new HashMap<>();
@@ -127,6 +127,8 @@ public class MainActivity extends AppCompatActivity {
         params.isFilterEnabled = globalPrefs.getBoolean("perf_filter_enabled", true);
         params.filterCutoff = globalPrefs.getFloat("filter_cutoff", 1000.0f);
         params.filterResonance = globalPrefs.getFloat("filter_resonance", 1.0f);
+        params.isOctaveEnabled = globalPrefs.getBoolean("perf_octave_enabled", true);
+        params.octaveSlewRate = globalPrefs.getFloat("perf_octave_slew", 0.5f);
 
         NativeAudioEngine.create(params.recordingMode);
         NativeAudioEngine.setFixedDurationMode(params.fixedDuration);
@@ -197,6 +199,9 @@ public class MainActivity extends AppCompatActivity {
             driveContainer.setVisibility(params.isDriveEnabled ? View.VISIBLE : View.GONE);
         if (filterContainer != null)
             filterContainer.setVisibility(params.isFilterEnabled ? View.VISIBLE : View.GONE);
+        View octaveContainer = findViewById(R.id.performance_octave_container);
+        if (octaveContainer != null)
+            octaveContainer.setVisibility(params.isOctaveEnabled ? View.VISIBLE : View.GONE);
     }
 
     private void updateValueLabels() {
@@ -328,6 +333,7 @@ public class MainActivity extends AppCompatActivity {
         seekPitchBend = findViewById(R.id.seek_pitch_bend);
         seekModulation = findViewById(R.id.seek_modulation);
         seekDrive = findViewById(R.id.seek_drive);
+        seekOctaveJump = findViewById(R.id.seek_octave_jump);
         padOscillator = findViewById(R.id.pad_oscillator);
         padFilter = findViewById(R.id.pad_filter);
 
@@ -355,6 +361,24 @@ public class MainActivity extends AppCompatActivity {
             public void onStopTrackingTouch(SeekBar seekBar) {
                 seekBar.setProgress(100);
                 NativeAudioEngine.setPitchBend(0);
+            }
+        });
+
+        seekOctaveJump.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                float offset = (float) (progress - 1); // -1.0, 0.0, 1.0
+                NativeAudioEngine.setOctaveOffset(offset);
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                seekBar.setProgress(1);
+                NativeAudioEngine.setOctaveOffset(0);
             }
         });
 
@@ -543,6 +567,7 @@ public class MainActivity extends AppCompatActivity {
         NativeAudioEngine.setDelay(params.delayTime, params.delayFeedback, params.delayWet);
         NativeAudioEngine.setFilter(params.filterCutoff, params.filterResonance);
         NativeAudioEngine.setEffectsEnabled(params.isPitchEnabled, params.isModEnabled, params.isDriveEnabled, params.isDelayEnabled, params.isFilterEnabled);
+        NativeAudioEngine.setOctaveSlewRate((float) params.octaveSlewRate);
         NativeAudioEngine.setBufferSize(params.bufferSize);
     }
 
@@ -736,9 +761,13 @@ public class MainActivity extends AppCompatActivity {
         Switch swDrive = dialogView.findViewById(R.id.switch_drive_enable);
         Switch swDelay = dialogView.findViewById(R.id.switch_delay_enable);
         Switch swFilter = dialogView.findViewById(R.id.switch_filter_enable);
+        Switch swOctave = dialogView.findViewById(R.id.switch_octave_enable);
 
         TextView labelDriveLimit = dialogView.findViewById(R.id.label_drive_limit);
         SeekBar seekDriveLimit = dialogView.findViewById(R.id.seek_drive_limit);
+
+        TextView labelOctaveSlew = dialogView.findViewById(R.id.label_octave_slew);
+        SeekBar seekOctaveSlew = dialogView.findViewById(R.id.seek_octave_slew);
 
 
         Switch swRecording = dialogView.findViewById(R.id.switch_recording_mode);
@@ -807,6 +836,15 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        seekOctaveSlew.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                labelOctaveSlew.setText(String.format("Octave Smoothing: %d%%", progress));
+            }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+
         seekBufferSize.setOnSeekBarChangeListener(createSeekListener(labelBufferSize, "Buffer Size (Frames): %d"));
         seekGlideTime.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
@@ -866,12 +904,14 @@ public class MainActivity extends AppCompatActivity {
         seekDelayTime.setProgress((int) (params.delayTime * 1000));
         seekDelayFeedback.setProgress((int) (params.delayFeedback * 100));
         seekDriveLimit.setProgress((int) (params.driveLimit * 100));
+        seekOctaveSlew.setProgress((int) (params.octaveSlewRate * 100));
 
         swPitch.setChecked(params.isPitchEnabled);
         swMod.setChecked(params.isModEnabled);
         swDrive.setChecked(params.isDriveEnabled);
         swDelay.setChecked(params.isDelayEnabled);
         swFilter.setChecked(params.isFilterEnabled);
+        swOctave.setChecked(params.isOctaveEnabled);
 
         // Dynamic visibility logic
         View[] pitchViews = {labelBendRange, seekBendRange, labelBendSlew, seekBendSlew, labelGlideTime, seekGlideTime};
@@ -884,6 +924,9 @@ public class MainActivity extends AppCompatActivity {
         autoToggleVisibility(swDrive, driveViews);
         autoToggleVisibility(swDelay, delayViews);
 
+        View[] octaveViews = {labelOctaveSlew, seekOctaveSlew};
+        autoToggleVisibility(swOctave, octaveViews);
+
         // Update labels initially
         labelBendRange.setText(String.format("Pitch Bend Range: %.1f semitones", params.bendRange));
         labelBendSlew.setText(String.format("Pitch Bend Smoothing: %d%%", (int) (params.bendSlewRate * 100)));
@@ -894,6 +937,7 @@ public class MainActivity extends AppCompatActivity {
         labelDelayTime.setText(String.format("Delay Time: %d ms", (int)(params.delayTime * 1000)));
         labelDelayFeedback.setText(String.format("Delay Feedback: %d%%", (int)(params.delayFeedback * 100)));
         labelDriveLimit.setText(String.format("Overdrive Gain Limit: %d%%", (int)(params.driveLimit * 100)));
+        labelOctaveSlew.setText(String.format("Octave Smoothing: %d%%", (int)(params.octaveSlewRate * 100)));
 
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setView(dialogView)
@@ -914,7 +958,9 @@ public class MainActivity extends AppCompatActivity {
             params.isDriveEnabled = swDrive.isChecked();
             params.isDelayEnabled = swDelay.isChecked();
             params.isFilterEnabled = swFilter.isChecked();
+            params.isOctaveEnabled = swOctave.isChecked();
             params.driveLimit = seekDriveLimit.getProgress() / 100.0;
+            params.octaveSlewRate = seekOctaveSlew.getProgress() / 100.0;
             params.recordingMode = swRecording.isChecked();
 
             NativeAudioEngine.setRecordingMode(params.recordingMode);
@@ -941,6 +987,8 @@ public class MainActivity extends AppCompatActivity {
                     .putFloat("env_sustain_level", (float) params.sustainLevel)
                     .putFloat("env_release", (float) params.releaseSec)
                     .putFloat("perf_drive", (float) params.drive)
+                    .putBoolean("perf_octave_enabled", params.isOctaveEnabled)
+                    .putFloat("perf_octave_slew", (float) params.octaveSlewRate)
                     .apply();
 
             updateEffectVisibility();

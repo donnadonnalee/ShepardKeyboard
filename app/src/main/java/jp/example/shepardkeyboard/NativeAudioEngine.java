@@ -22,4 +22,6 @@ public class NativeAudioEngine {
     public static native void setEffectsEnabled(boolean pitch, boolean mod, boolean drive, boolean delay, boolean filter);
     public static native void setFilter(double cutoff, double resonance);
     public static native void setBufferSize(int frames);
+    public static native void setOctaveOffset(float offset);
+    public static native void setOctaveSlewRate(float slewRate);
 }

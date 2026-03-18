@@ -182,13 +182,38 @@
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintBottom_toBottomOf="parent">
 
+            <!-- Octave Jump (Vertical) -->
+            <LinearLayout
+                android:id="@+id/performance_octave_container"
+                android:layout_width="60dp"
+                android:layout_height="match_parent"
+                android:gravity="center_horizontal"
+                android:orientation="vertical">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="OCTAVE" android:textColor="#666666" android:textSize="9sp"/>
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1">
+                    <SeekBar
+                        android:id="@+id/seek_octave_jump"
+                        android:layout_width="140dp"
+                        android:layout_height="30dp"
+                        android:max="2"
+                        android:progress="1"
+                        android:layout_gravity="center"
+                        android:rotation="-90" />
+                </FrameLayout>
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="JUMP" android:textColor="#666666" android:textSize="9sp"/>
+            </LinearLayout>
+
             <!-- Pitch Bend (Vertical) -->
             <LinearLayout
                 android:id="@+id/performance_pitch_container"
                 android:layout_width="60dp"
                 android:layout_height="match_parent"
                 android:gravity="center_horizontal"
-                android:orientation="vertical">
+                android:orientation="vertical"
+                android:layout_marginStart="8dp">
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="PITCH" android:textColor="#666666" android:textSize="9sp"/>
                 <FrameLayout
                     android:layout_width="match_parent"

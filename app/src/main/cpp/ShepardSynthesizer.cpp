@@ -39,6 +39,14 @@ void ShepardSynthesizer::process(float* output, int numFrames) {
             currentPitchBend = 0;
         }
 
+        // Octave jump smoothing
+        {
+            float diff = targetOctaveOffset - currentOctaveOffset;
+            float coeff = std::pow(0.1f, (float)octaveSlewRate * 5.0f);
+            if (octaveSlewRate <= 0.05) coeff = 1.0f;
+            currentOctaveOffset += diff * coeff;
+        }
+
         for (auto& v : voices) {
             if (!v.active && v.envelope <= 0) continue;
 
@@ -114,10 +122,13 @@ void ShepardSynthesizer::process(float* output, int numFrames) {
             double f = currentFreq;
             while (f > 20.0) f /= 2.0; 
             
+            // Smoothed center frequency for octave jump
+            double smoothedCenterFreq = centerFreq * std::pow(2.0, currentOctaveOffset);
+
             // Sum all octaves from lowest to highest audible
             while (f < 22050.0) {
                 // Gaussian weighting in log2 scale
-                double log2Freq = std::log2(f / centerFreq);
+                double log2Freq = std::log2(f / smoothedCenterFreq);
                 double weight = std::exp(-std::pow(log2Freq, 2.0) / (2.0 * std::pow(sigma, 2.0)));
                 
                 // Use the accumulated phase. The ratio f/currentFreq gives the octave multiplier.
@@ -312,4 +323,14 @@ void ShepardSynthesizer::setFilter(double cutoff, double resonance) {
     // Limit cutoff to safe range
     filterCutoff = std::max(20.0, std::min(kSampleRate * 0.45, cutoff));
     filterResonance = std::max(0.01, std::min(5.0, resonance));
+}
+
+void ShepardSynthesizer::setOctaveOffset(float offset) {
+    std::lock_guard<std::mutex> lock(voiceMutex);
+    targetOctaveOffset = offset;
+}
+
+void ShepardSynthesizer::setOctaveSlewRate(double slewRate) {
+    std::lock_guard<std::mutex> lock(voiceMutex);
+    octaveSlewRate = slewRate;
 }

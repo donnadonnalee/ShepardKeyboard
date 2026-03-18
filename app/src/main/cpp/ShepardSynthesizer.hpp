@@ -29,6 +29,8 @@ public:
     void setDelay(double time, double feedback, double wet);
     void setFilter(double cutoff, double resonance);
     void setEffectsEnabled(bool pitch, bool mod, bool drive, bool delay, bool filter);
+    void setOctaveOffset(float offset);
+    void setOctaveSlewRate(double slewRate);
     
     // Updated noteOn to support slides
     void noteOn(int noteIndex, float volume, bool slideFromOld = false, int oldNoteIndex = -1);
@@ -68,6 +70,10 @@ private:
     double bendRange = 2.0;       
     double bendSlewRate = 0.95;   
     double glideSeconds = 0.1;
+
+    float targetOctaveOffset = 0.0f;
+    float currentOctaveOffset = 0.0f;
+    double octaveSlewRate = 0.5;
     
     double lfoPhase = 0.0;
     double modDepth = 0.0; // in semitones
