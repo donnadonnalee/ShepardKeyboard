@@ -12,8 +12,8 @@ android {
         applicationId = "jp.example.shepardkeyboard"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.0002"
+        versionCode = 5
+        versionName = "1.0005"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

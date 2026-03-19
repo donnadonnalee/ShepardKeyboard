@@ -65,6 +65,10 @@ public class MainActivity extends AppCompatActivity {
 
     // Real-time Controls
     private SeekBar seekPitchBend, seekModulation, seekDrive, seekOctaveJump;
+    private SeekBar seekPitchBendCompact, seekModulationCompact, seekDriveCompact, seekOctaveJumpCompact;
+    private ImageButton ibCollapse;
+    private View compactControls, dashboard;
+    private boolean isCollapsed = false;
     private XYPadView padOscillator, padFilter;
     private TextView tvCenterFreq, tvSigma, tvDriveValue, tvFilterCutoff, tvFilterResonance;
     private final Map<Integer, Integer> activePointers = new HashMap<>();
@@ -95,8 +99,7 @@ public class MainActivity extends AppCompatActivity {
                 if (uri != null) {
                     loadAudio(uri);
                 }
-            }
-    );
+            });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -178,6 +181,11 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.btn_main_share).setOnClickListener(v -> shareApp());
         findViewById(R.id.btn_main_ads).setOnClickListener(v -> showInterstitialAd());
 
+        ibCollapse = findViewById(R.id.ib_collapse);
+        dashboard = findViewById(R.id.dashboard);
+        compactControls = findViewById(R.id.compact_controls);
+        ibCollapse.setOnClickListener(v -> toggleDashboard());
+
         MobileAds.initialize(this, initializationStatus -> {
             loadInterstitialAd();
         });
@@ -186,6 +194,38 @@ public class MainActivity extends AppCompatActivity {
         updateValueLabels();
         updateEffectVisibility();
         syncNativeParams();
+    }
+
+    private void toggleDashboard() {
+        isCollapsed = !isCollapsed;
+
+        dashboard.setVisibility(isCollapsed ? View.GONE : View.VISIBLE);
+        compactControls.setVisibility(isCollapsed ? View.VISIBLE : View.GONE);
+        ibCollapse.setImageResource(isCollapsed ? R.drawable.ic_expand : R.drawable.ic_collapse);
+
+        androidx.constraintlayout.widget.ConstraintLayout keyboardContainer = findViewById(R.id.keyboard_container);
+        androidx.constraintlayout.widget.ConstraintLayout.LayoutParams lp = (androidx.constraintlayout.widget.ConstraintLayout.LayoutParams) keyboardContainer.getLayoutParams();
+
+        if (isCollapsed) {
+            lp.topToBottom = R.id.compact_controls;
+            lp.matchConstraintPercentHeight = 0.70f;
+
+            // Sync from main to compact
+            seekOctaveJumpCompact.setProgress(seekOctaveJump.getProgress());
+            seekPitchBendCompact.setProgress(seekPitchBend.getProgress());
+            seekModulationCompact.setProgress(seekModulation.getProgress());
+            seekDriveCompact.setProgress(seekDrive.getProgress());
+        } else {
+            lp.topToBottom = R.id.dashboard;
+            lp.matchConstraintPercentHeight = 0.45f;
+
+            // Sync from compact to main
+            seekOctaveJump.setProgress(seekOctaveJumpCompact.getProgress());
+            seekPitchBend.setProgress(seekPitchBendCompact.getProgress());
+            seekModulation.setProgress(seekModulationCompact.getProgress());
+            seekDrive.setProgress(seekDriveCompact.getProgress());
+        }
+        keyboardContainer.setLayoutParams(lp);
     }
 
     private void updateEffectVisibility() {
@@ -217,7 +257,7 @@ public class MainActivity extends AppCompatActivity {
         if (tvFilterResonance != null)
             tvFilterResonance.setText(String.format("Q:%.1f", params.filterResonance));
         if (tvDriveValue != null)
-            tvDriveValue.setText(String.format("%d%%", (int)(params.drive * 100)));
+            tvDriveValue.setText(String.format("%d%%", (int) (params.drive * 100)));
         TextView tvEnv = findViewById(R.id.tv_env_values);
         if (tvEnv != null) {
             tvEnv.setText(String.format("A:%.2f D:%.2f S:%.2f R:%.2f",
@@ -337,6 +377,12 @@ public class MainActivity extends AppCompatActivity {
         seekModulation = findViewById(R.id.seek_modulation);
         seekDrive = findViewById(R.id.seek_drive);
         seekOctaveJump = findViewById(R.id.seek_octave_jump);
+
+        seekPitchBendCompact = findViewById(R.id.seek_pitch_bend_compact);
+        seekModulationCompact = findViewById(R.id.seek_modulation_compact);
+        seekDriveCompact = findViewById(R.id.seek_drive_compact);
+        seekOctaveJumpCompact = findViewById(R.id.seek_octave_jump_compact);
+
         padOscillator = findViewById(R.id.pad_oscillator);
         padFilter = findViewById(R.id.pad_filter);
 
@@ -352,6 +398,9 @@ public class MainActivity extends AppCompatActivity {
         seekPitchBend.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (fromUser) {
+                    seekPitchBendCompact.setProgress(progress);
+                }
                 float bend = (progress - 100) / 100.0f; // -1.0 to 1.0
                 NativeAudioEngine.setPitchBend(bend);
             }
@@ -363,6 +412,26 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
                 seekBar.setProgress(100);
+                seekPitchBendCompact.setProgress(100);
+                NativeAudioEngine.setPitchBend(0);
+            }
+        });
+
+        seekPitchBendCompact.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (fromUser) {
+                    seekPitchBend.setProgress(progress);
+                }
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {}
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                seekBar.setProgress(100);
+                seekPitchBend.setProgress(100);
                 NativeAudioEngine.setPitchBend(0);
             }
         });
@@ -370,6 +439,9 @@ public class MainActivity extends AppCompatActivity {
         seekOctaveJump.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (fromUser) {
+                    seekOctaveJumpCompact.setProgress(progress);
+                }
                 float offset = (float) (progress - 1); // -1.0, 0.0, 1.0
                 NativeAudioEngine.setOctaveOffset(offset);
             }
@@ -381,6 +453,26 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
                 seekBar.setProgress(1);
+                seekOctaveJumpCompact.setProgress(1);
+                NativeAudioEngine.setOctaveOffset(0);
+            }
+        });
+
+        seekOctaveJumpCompact.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (fromUser) {
+                    seekOctaveJump.setProgress(progress);
+                }
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {}
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                seekBar.setProgress(1);
+                seekOctaveJump.setProgress(1);
                 NativeAudioEngine.setOctaveOffset(0);
             }
         });
@@ -388,6 +480,9 @@ public class MainActivity extends AppCompatActivity {
         seekModulation.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (fromUser) {
+                    seekModulationCompact.setProgress(progress);
+                }
                 // Scaling the lever (0-100) by the "Max" depth set in settings
                 double scaledDepth = (progress / 100.0) * params.modulationDepth;
                 NativeAudioEngine.setPerformanceParams(params.bendRange, params.bendSlewRate, scaledDepth,
@@ -403,13 +498,33 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        seekModulationCompact.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (fromUser) {
+                    seekModulation.setProgress(progress);
+                }
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {}
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+
         seekDrive.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (fromUser) {
+                    seekDriveCompact.setProgress(progress);
+                }
                 params.drive = progress / 100.0;
-                if (tvDriveValue != null) tvDriveValue.setText(progress + "%");
+                if (tvDriveValue != null)
+                    tvDriveValue.setText(progress + "%");
                 NativeAudioEngine.setDrive(params.drive * params.driveLimit);
-                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putFloat("perf_drive", (float) params.drive).apply();
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putFloat("perf_drive", (float) params.drive)
+                        .apply();
             }
 
             @Override
@@ -421,6 +536,21 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        seekDriveCompact.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (fromUser) {
+                    seekDrive.setProgress(progress);
+                }
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {}
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+
         padOscillator.setOnXYChangedListener((x, y) -> {
             // Y: Frequency (200 to 2000, exponential?)
             params.centerFreq = 200.0 * Math.pow(10, y); // 200 to 2000
@@ -429,9 +559,9 @@ public class MainActivity extends AppCompatActivity {
             updateValueLabels();
             syncNativeParams();
             getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-                .putFloat("osc_center", (float) params.centerFreq)
-                .putFloat("osc_sigma", (float) params.sigma)
-                .apply();
+                    .putFloat("osc_center", (float) params.centerFreq)
+                    .putFloat("osc_sigma", (float) params.sigma)
+                    .apply();
         });
 
         padFilter.setOnXYChangedListener((x, y) -> {
@@ -442,14 +572,14 @@ public class MainActivity extends AppCompatActivity {
             updateValueLabels();
             syncNativeParams();
             getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-                .putFloat("filter_cutoff", (float) params.filterCutoff)
-                .putFloat("filter_resonance", (float) params.filterResonance)
-                .apply();
+                    .putFloat("filter_cutoff", (float) params.filterCutoff)
+                    .putFloat("filter_resonance", (float) params.filterResonance)
+                    .apply();
         });
 
         // Initial sync
         seekDrive.setProgress((int) (params.drive * 100));
-        
+
         // Initial XY Pad positions
         float freqY = (float) (Math.log10(params.centerFreq / 200.0));
         float sigmaX = (float) ((params.sigma - 0.1) / 2.9);
@@ -479,13 +609,20 @@ public class MainActivity extends AppCompatActivity {
                     tvAudioTime.setText(formatTime(progress) + "/" + formatTime(mediaPlayer.getDuration()));
                 }
             }
-            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
-            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
         });
     }
 
     private void toggleAudioPlayback() {
-        if (mediaPlayer == null) return;
+        if (mediaPlayer == null)
+            return;
         if (mediaPlayer.isPlaying()) {
             mediaPlayer.pause();
             ibAudioPlayPause.setImageResource(R.drawable.ic_play);
@@ -542,14 +679,16 @@ public class MainActivity extends AppCompatActivity {
             try (Cursor cursor = getContentResolver().query(uri, null, null, null, null)) {
                 if (cursor != null && cursor.moveToFirst()) {
                     int index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
-                    if (index != -1) result = cursor.getString(index);
+                    if (index != -1)
+                        result = cursor.getString(index);
                 }
             }
         }
         if (result == null) {
             result = uri.getPath();
             int cut = result.lastIndexOf('/');
-            if (cut != -1) result = result.substring(cut + 1);
+            if (cut != -1)
+                result = result.substring(cut + 1);
         }
         return result;
     }
@@ -569,7 +708,8 @@ public class MainActivity extends AppCompatActivity {
         NativeAudioEngine.setDrive(params.drive * params.driveLimit);
         NativeAudioEngine.setDelay(params.delayTime, params.delayFeedback, params.delayWet);
         NativeAudioEngine.setFilter(params.filterCutoff, params.filterResonance);
-        NativeAudioEngine.setEffectsEnabled(params.isPitchEnabled, params.isModEnabled, params.isDriveEnabled, params.isDelayEnabled, params.isFilterEnabled);
+        NativeAudioEngine.setEffectsEnabled(params.isPitchEnabled, params.isModEnabled, params.isDriveEnabled,
+                params.isDelayEnabled, params.isFilterEnabled);
         NativeAudioEngine.setOctaveSlewRate((float) params.octaveSlewRate);
         NativeAudioEngine.setBufferSize(params.bufferSize);
     }
@@ -615,7 +755,8 @@ public class MainActivity extends AppCompatActivity {
                     float minY = Float.MAX_VALUE;
                     for (int i = 0; i < event.getPointerCount(); i++) {
                         float y = event.getY(i);
-                        if (y < minY) minY = y;
+                        if (y < minY)
+                            minY = y;
                     }
 
                     for (int i = 0; i < event.getPointerCount(); i++) {
@@ -800,14 +941,16 @@ public class MainActivity extends AppCompatActivity {
         TextView labelOctaveSlew = dialogView.findViewById(R.id.label_octave_slew);
         SeekBar seekOctaveSlew = dialogView.findViewById(R.id.seek_octave_slew);
 
-
         Switch swRecording = dialogView.findViewById(R.id.switch_recording_mode);
         swRecording.setChecked(params.recordingMode);
 
         RadioGroup rgVerticalControl = dialogView.findViewById(R.id.rg_vertical_control);
-        if (params.verticalControlParam == 0) rgVerticalControl.check(R.id.rb_vertical_volume);
-        else if (params.verticalControlParam == 1) rgVerticalControl.check(R.id.rb_vertical_modulation);
-        else if (params.verticalControlParam == 2) rgVerticalControl.check(R.id.rb_vertical_lpf);
+        if (params.verticalControlParam == 0)
+            rgVerticalControl.check(R.id.rb_vertical_volume);
+        else if (params.verticalControlParam == 1)
+            rgVerticalControl.check(R.id.rb_vertical_modulation);
+        else if (params.verticalControlParam == 2)
+            rgVerticalControl.check(R.id.rb_vertical_lpf);
 
         Button btnApply = dialogView.findViewById(R.id.btn_apply);
 
@@ -877,8 +1020,14 @@ public class MainActivity extends AppCompatActivity {
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 labelOctaveSlew.setText(String.format("Octave Smoothing: %d%%", progress));
             }
-            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
-            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
         });
 
         seekBufferSize.setOnSeekBarChangeListener(createSeekListener(labelBufferSize, "Buffer Size (Frames): %d"));
@@ -898,35 +1047,63 @@ public class MainActivity extends AppCompatActivity {
         });
 
         seekDelayWet.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 labelDelayWet.setText(String.format("Delay Wet (Mix): %d%%", progress));
             }
-            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
-            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
         });
 
         seekDelayTime.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 labelDelayTime.setText(String.format("Delay Time (ms): %d", progress));
             }
-            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
-            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
         });
 
         seekDelayFeedback.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 labelDelayFeedback.setText(String.format("Delay Feedback: %d%%", progress));
             }
-            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
-            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
         });
 
         seekDriveLimit.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 labelDriveLimit.setText(String.format("Overdrive Gain Limit: %d%%", progress));
             }
-            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
-            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
         });
 
         // Set initial progress
@@ -950,17 +1127,19 @@ public class MainActivity extends AppCompatActivity {
         swOctave.setChecked(params.isOctaveEnabled);
 
         // Dynamic visibility logic
-        View[] pitchViews = {labelBendRange, seekBendRange, labelBendSlew, seekBendSlew, labelGlideTime, seekGlideTime};
-        View[] modViews = {labelModDepth, seekModDepth, labelModRate, seekModRate};
-        View[] driveViews = {labelDriveLimit, seekDriveLimit};
-        View[] delayViews = {labelDelayWet, seekDelayWet, labelDelayTime, seekDelayTime, labelDelayFeedback, seekDelayFeedback};
+        View[] pitchViews = { labelBendRange, seekBendRange, labelBendSlew, seekBendSlew, labelGlideTime,
+                seekGlideTime };
+        View[] modViews = { labelModDepth, seekModDepth, labelModRate, seekModRate };
+        View[] driveViews = { labelDriveLimit, seekDriveLimit };
+        View[] delayViews = { labelDelayWet, seekDelayWet, labelDelayTime, seekDelayTime, labelDelayFeedback,
+                seekDelayFeedback };
 
         autoToggleVisibility(swPitch, pitchViews);
         autoToggleVisibility(swMod, modViews);
         autoToggleVisibility(swDrive, driveViews);
         autoToggleVisibility(swDelay, delayViews);
 
-        View[] octaveViews = {labelOctaveSlew, seekOctaveSlew};
+        View[] octaveViews = { labelOctaveSlew, seekOctaveSlew };
         autoToggleVisibility(swOctave, octaveViews);
 
         // Update labels initially
@@ -969,11 +1148,11 @@ public class MainActivity extends AppCompatActivity {
         labelModDepth.setText(String.format("Max Modulation Depth: %.1f semitones", params.modulationDepth));
         labelModRate.setText(String.format("Modulation Rate: %.1f Hz", params.modulationRate));
         labelBufferSize.setText(String.format("Buffer Size (Frames): %d", params.bufferSize));
-        labelDelayWet.setText(String.format("Delay Wet (Mix): %d%%", (int)(params.delayWet * 100)));
-        labelDelayTime.setText(String.format("Delay Time: %d ms", (int)(params.delayTime * 1000)));
-        labelDelayFeedback.setText(String.format("Delay Feedback: %d%%", (int)(params.delayFeedback * 100)));
-        labelDriveLimit.setText(String.format("Overdrive Gain Limit: %d%%", (int)(params.driveLimit * 100)));
-        labelOctaveSlew.setText(String.format("Octave Smoothing: %d%%", (int)(params.octaveSlewRate * 100)));
+        labelDelayWet.setText(String.format("Delay Wet (Mix): %d%%", (int) (params.delayWet * 100)));
+        labelDelayTime.setText(String.format("Delay Time: %d ms", (int) (params.delayTime * 1000)));
+        labelDelayFeedback.setText(String.format("Delay Feedback: %d%%", (int) (params.delayFeedback * 100)));
+        labelDriveLimit.setText(String.format("Overdrive Gain Limit: %d%%", (int) (params.driveLimit * 100)));
+        labelOctaveSlew.setText(String.format("Octave Smoothing: %d%%", (int) (params.octaveSlewRate * 100)));
 
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setView(dialogView)
@@ -1000,9 +1179,12 @@ public class MainActivity extends AppCompatActivity {
             params.recordingMode = swRecording.isChecked();
 
             int checkedId = rgVerticalControl.getCheckedRadioButtonId();
-            if (checkedId == R.id.rb_vertical_volume) params.verticalControlParam = 0;
-            else if (checkedId == R.id.rb_vertical_modulation) params.verticalControlParam = 1;
-            else if (checkedId == R.id.rb_vertical_lpf) params.verticalControlParam = 2;
+            if (checkedId == R.id.rb_vertical_volume)
+                params.verticalControlParam = 0;
+            else if (checkedId == R.id.rb_vertical_modulation)
+                params.verticalControlParam = 1;
+            else if (checkedId == R.id.rb_vertical_lpf)
+                params.verticalControlParam = 2;
 
             NativeAudioEngine.setRecordingMode(params.recordingMode);
             getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
@@ -1036,6 +1218,7 @@ public class MainActivity extends AppCompatActivity {
             updateEffectVisibility();
             syncNativeParams();
             dialog.dismiss();
+            showInterstitialAd();
         });
 
         dialog.show();
@@ -1043,10 +1226,12 @@ public class MainActivity extends AppCompatActivity {
 
     private void autoToggleVisibility(Switch sw, View[] views) {
         // Initial state
-        for (View v : views) v.setVisibility(sw.isChecked() ? View.VISIBLE : View.GONE);
+        for (View v : views)
+            v.setVisibility(sw.isChecked() ? View.VISIBLE : View.GONE);
         // Listener
         sw.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            for (View v : views) v.setVisibility(isChecked ? View.VISIBLE : View.GONE);
+            for (View v : views)
+                v.setVisibility(isChecked ? View.VISIBLE : View.GONE);
         });
     }
 
@@ -1111,6 +1296,7 @@ public class MainActivity extends AppCompatActivity {
             Log.e(TAG, "Error saving preset", e);
         }
     }
+
     private void showLoadPresetDialog() {
         final List<String> options = new ArrayList<>();
         options.add("Load Audio");
@@ -1120,7 +1306,7 @@ public class MainActivity extends AppCompatActivity {
                 .setTitle("Select Action")
                 .setItems(options.toArray(new String[0]), (dialog, which) -> {
                     if (which == 0) {
-                        audioPickerLauncher.launch(new String[]{"audio/*"});
+                        audioPickerLauncher.launch(new String[] { "audio/*" });
                     } else {
                         showPresetSelectionDialog();
                     }
@@ -1132,7 +1318,7 @@ public class MainActivity extends AppCompatActivity {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         Map<String, ?> allEntries = prefs.getAll();
         final List<String> names = new ArrayList<>();
-        
+
         for (Map.Entry<String, ?> entry : allEntries.entrySet()) {
             Object val = entry.getValue();
             if (val instanceof String && ((String) val).trim().startsWith("{")) {
@@ -1233,7 +1419,8 @@ public class MainActivity extends AppCompatActivity {
     private void shareApp() {
         Intent sendIntent = new Intent();
         sendIntent.setAction(Intent.ACTION_SEND);
-        sendIntent.putExtra(Intent.EXTRA_TEXT, "Check out this Shepard Keyboard app!");
+        sendIntent.putExtra(Intent.EXTRA_TEXT, "Check out this Shepard Keyboard app!\n\n" +
+                "https://play.google.com/store/apps/details?id=jp.example.shepardkeyboard");
         sendIntent.setType("text/plain");
 
         Intent shareIntent = Intent.createChooser(sendIntent, null);
