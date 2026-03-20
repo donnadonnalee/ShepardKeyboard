@@ -12,8 +12,8 @@ android {
         applicationId = "jp.example.shepardkeyboard"
         minSdk = 26
         targetSdk = 36
-        versionCode = 8
-        versionName = "1.0008"
+        versionCode = 10
+        versionName = "1.0010"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -58,6 +58,7 @@ dependencies {
     implementation(libs.constraintlayout)
     implementation(libs.play.services.ads)
     implementation(libs.oboe)
+    implementation(libs.billing)
 
 
     testImplementation(libs.junit)

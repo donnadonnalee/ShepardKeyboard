@@ -555,22 +555,6 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- White Keys (With clearer borders) -->
-        <View android:id="@+id/key_c" android:layout_width="0dp" android:layout_height="match_parent" android:background="@drawable/key_white_background" app:layout_constraintHorizontal_weight="1" app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toStartOf="@+id/key_d" />
-        <View android:id="@+id/key_d" android:layout_width="0dp" android:layout_height="match_parent" android:background="@drawable/key_white_background" app:layout_constraintHorizontal_weight="1" app:layout_constraintStart_toEndOf="@+id/key_c" app:layout_constraintEnd_toStartOf="@+id/key_e" />
-        <View android:id="@+id/key_e" android:layout_width="0dp" android:layout_height="match_parent" android:background="@drawable/key_white_background" app:layout_constraintHorizontal_weight="1" app:layout_constraintStart_toEndOf="@+id/key_d" app:layout_constraintEnd_toStartOf="@+id/key_f" />
-        <View android:id="@+id/key_f" android:layout_width="0dp" android:layout_height="match_parent" android:background="@drawable/key_white_background" app:layout_constraintHorizontal_weight="1" app:layout_constraintStart_toEndOf="@+id/key_e" app:layout_constraintEnd_toStartOf="@+id/key_g" />
-        <View android:id="@+id/key_g" android:layout_width="0dp" android:layout_height="match_parent" android:background="@drawable/key_white_background" app:layout_constraintHorizontal_weight="1" app:layout_constraintStart_toEndOf="@+id/key_f" app:layout_constraintEnd_toStartOf="@+id/key_a" />
-        <View android:id="@+id/key_a" android:layout_width="0dp" android:layout_height="match_parent" android:background="@drawable/key_white_background" app:layout_constraintHorizontal_weight="1" app:layout_constraintStart_toEndOf="@+id/key_g" app:layout_constraintEnd_toStartOf="@+id/key_b" />
-        <View android:id="@+id/key_b" android:layout_width="0dp" android:layout_height="match_parent" android:background="@drawable/key_white_background" app:layout_constraintHorizontal_weight="1" app:layout_constraintStart_toEndOf="@+id/key_a" app:layout_constraintEnd_toEndOf="parent" />
-
-        <!-- Black Keys (Wider: 60dp, and with elevation/shadow) -->
-        <View android:id="@+id/key_cs" android:layout_width="60dp" android:layout_height="0dp" android:background="@drawable/key_black_background" android:elevation="6dp" app:layout_constraintHeight_percent="0.60" app:layout_constraintTop_toTopOf="parent" app:layout_constraintStart_toEndOf="@+id/key_c" app:layout_constraintEnd_toEndOf="@+id/key_c" />
-        <View android:id="@+id/key_ds" android:layout_width="60dp" android:layout_height="0dp" android:background="@drawable/key_black_background" android:elevation="6dp" app:layout_constraintHeight_percent="0.60" app:layout_constraintTop_toTopOf="parent" app:layout_constraintStart_toEndOf="@+id/key_d" app:layout_constraintEnd_toEndOf="@+id/key_d" />
-        <View android:id="@+id/key_fs" android:layout_width="60dp" android:layout_height="0dp" android:background="@drawable/key_black_background" android:elevation="6dp" app:layout_constraintHeight_percent="0.60" app:layout_constraintTop_toTopOf="parent" app:layout_constraintStart_toEndOf="@+id/key_f" app:layout_constraintEnd_toEndOf="@+id/key_f" />
-        <View android:id="@+id/key_gs" android:layout_width="60dp" android:layout_height="0dp" android:background="@drawable/key_black_background" android:elevation="6dp" app:layout_constraintHeight_percent="0.60" app:layout_constraintTop_toTopOf="parent" app:layout_constraintStart_toEndOf="@+id/key_g" app:layout_constraintEnd_toEndOf="@+id/key_g" />
-        <View android:id="@+id/key_as" android:layout_width="60dp" android:layout_height="0dp" android:background="@drawable/key_black_background" android:elevation="6dp" app:layout_constraintHeight_percent="0.60" app:layout_constraintTop_toTopOf="parent" app:layout_constraintStart_toEndOf="@+id/key_a" app:layout_constraintEnd_toEndOf="@+id/key_a" />
-
     </androidx.constraintlayout.widget.ConstraintLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

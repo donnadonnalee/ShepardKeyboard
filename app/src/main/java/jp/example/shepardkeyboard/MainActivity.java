@@ -21,10 +21,13 @@ import android.provider.OpenableColumns;
 import android.media.MediaPlayer;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+
+import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
+import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
@@ -62,6 +65,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvTranspose;
     private EnvelopeView envelopeView;
     private InterstitialAd mInterstitialAd;
+    private BillingManager billingManager;
 
     // Real-time Controls
     private SeekBar seekPitchBend, seekModulation, seekDrive, seekOctaveJump;
@@ -145,6 +149,11 @@ public class MainActivity extends AppCompatActivity {
         params.isOctaveEnabled = globalPrefs.getBoolean("perf_octave_enabled", true);
         params.octaveSlewRate = globalPrefs.getFloat("perf_octave_slew", 0.5f);
         params.verticalControlParam = globalPrefs.getInt("perf_vertical_control", 0);
+        params.isScaleConfigEnabled = globalPrefs.getBoolean("perf_scale_config_enabled", false);
+        int enabledKeysMask = globalPrefs.getInt("perf_enabled_keys", 0xFFF); // Default all 12 keys enabled
+        for (int i = 0; i < 12; i++) {
+            params.enabledKeys[i] = ((enabledKeysMask >> i) & 1) == 1;
+        }
 
         NativeAudioEngine.create(params.recordingMode);
         NativeAudioEngine.setFixedDurationMode(params.fixedDuration);
@@ -201,6 +210,22 @@ public class MainActivity extends AppCompatActivity {
         MobileAds.initialize(this, initializationStatus -> {
             loadInterstitialAd();
         });
+
+        billingManager = new BillingManager(this, new BillingManager.BillingListener() {
+            @Override
+            public void onAdsRemovedStatusChanged(boolean adsRemoved) {
+                if (adsRemoved) {
+                    mInterstitialAd = null;
+                    Toast.makeText(MainActivity.this, "Ads removed successfully!", Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onBillingError(String message) {
+                Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
+            }
+        });
+        billingManager.startConnection();
 
         initDefaultPresets();
         updateValueLabels();
@@ -316,6 +341,12 @@ public class MainActivity extends AppCompatActivity {
             json.put("delayFeedback", dFeedback);
             json.put("delayWet", dWet);
             json.put("gain", 0.8);
+
+            int mask = 0;
+            for (int i = 0; i < 12; i++) {
+                if (params.enabledKeys[i]) mask |= (1 << i);
+            }
+            json.put("enabledKeys", mask);
 
             SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
             prefs.edit().putString(name, json.toString()).apply();
@@ -728,27 +759,56 @@ public class MainActivity extends AppCompatActivity {
 
     @SuppressLint("ClickableViewAccessibility")
     private void setupKeyboard() {
-        int[] keyIds = {
-                R.id.key_c, R.id.key_cs, R.id.key_d, R.id.key_ds, R.id.key_e, R.id.key_f,
-                R.id.key_fs, R.id.key_g, R.id.key_gs, R.id.key_a, R.id.key_as, R.id.key_b
-        };
+        ViewGroup container = findViewById(R.id.keyboard_container);
+        container.removeAllViews();
 
-        View container = findViewById(R.id.keyboard_container);
-        List<View> blackKeys = new ArrayList<>();
-        List<View> whiteKeys = new ArrayList<>();
+        final List<View> blackKeys = new ArrayList<>();
+        final List<View> whiteKeys = new ArrayList<>();
         viewToNote.clear();
 
-        for (int i = 0; i < keyIds.length; i++) {
-            View v = findViewById(keyIds[i]);
-            viewToNote.put(v, i);
-            if (getResources().getResourceEntryName(keyIds[i]).endsWith("s")) {
-                blackKeys.add(v);
-            } else {
-                whiteKeys.add(v);
+        View touchSurface;
+
+        if (!params.isScaleConfigEnabled) {
+            // Restore Piano Layout
+            getLayoutInflater().inflate(R.layout.layout_keyboard_piano, container, true);
+            int[] keyIds = {
+                    R.id.key_c, R.id.key_cs, R.id.key_d, R.id.key_ds, R.id.key_e, R.id.key_f,
+                    R.id.key_fs, R.id.key_g, R.id.key_gs, R.id.key_a, R.id.key_as, R.id.key_b
+            };
+            for (int i = 0; i < keyIds.length; i++) {
+                View v = container.findViewById(keyIds[i]);
+                viewToNote.put(v, i);
+                if (getResources().getResourceEntryName(keyIds[i]).endsWith("s")) {
+                    blackKeys.add(v);
+                } else {
+                    whiteKeys.add(v);
+                }
             }
+            touchSurface = container;
+        } else {
+            // Uniform Layout for Custom Scale
+            LinearLayout layout = new LinearLayout(this);
+            layout.setLayoutParams(new ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            layout.setOrientation(LinearLayout.HORIZONTAL);
+            container.addView(layout);
+
+            for (int i = 0; i < 12; i++) {
+                if (params.enabledKeys[i]) {
+                    View keyView = new View(this);
+                    LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f);
+                    keyView.setLayoutParams(lp);
+                    keyView.setBackgroundResource(R.drawable.key_white_background);
+                    
+                    layout.addView(keyView);
+                    viewToNote.put(keyView, i);
+                    whiteKeys.add(keyView);
+                }
+            }
+            touchSurface = layout;
         }
 
-        container.setOnTouchListener((v, event) -> {
+        touchSurface.setOnTouchListener((v, event) -> {
             int actionMasked = event.getActionMasked();
             int pointerIndex = event.getActionIndex();
             int pointerId = event.getPointerId(pointerIndex);
@@ -756,14 +816,8 @@ public class MainActivity extends AppCompatActivity {
             switch (actionMasked) {
                 case MotionEvent.ACTION_DOWN:
                 case MotionEvent.ACTION_POINTER_DOWN:
-                    // For DOWN, we just handle the new pointer (it might be the highest)
-                    for (int i = 0; i < event.getPointerCount(); i++) {
-                        float ty = event.getY(i);
-                        // We recalculate highest for all pointers even on DOWN to be safe
-                    }
-                    // Fall through to MOVE logic which handles all pointers
+                    break;
                 case MotionEvent.ACTION_MOVE:
-                    // For ACTION_MOVE, we need to check all active pointers
                     float minY = Float.MAX_VALUE;
                     for (int i = 0; i < event.getPointerCount(); i++) {
                         float y = event.getY(i);
@@ -775,7 +829,8 @@ public class MainActivity extends AppCompatActivity {
                         int pid = event.getPointerId(i);
                         float x = event.getX(i);
                         float y = event.getY(i);
-                        handleTouch(container, pid, x, y, blackKeys, whiteKeys, viewToNote, y == minY);
+                        // Coordinate conversion: event is relative to 'layout' (which matches container)
+                        handleTouch(v, pid, x, y, blackKeys, whiteKeys, viewToNote, y == minY);
                     }
                     break;
                 case MotionEvent.ACTION_UP:
@@ -924,6 +979,19 @@ public class MainActivity extends AppCompatActivity {
 
     private void showSettingsDialog() {
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_settings, null);
+
+        Button btnRemoveAds = dialogView.findViewById(R.id.btn_remove_ads);
+        Button btnApply = dialogView.findViewById(R.id.btn_apply);
+
+        if (billingManager.isAdsRemoved()) {
+            btnRemoveAds.setVisibility(View.GONE);
+            btnApply.setText("Apply Changes");
+        } else {
+            btnRemoveAds.setVisibility(View.VISIBLE);
+            btnRemoveAds.setOnClickListener(v -> billingManager.launchPurchaseFlow());
+            btnApply.setText("Apply Changes (Ads will play)");
+        }
+
         SeekBar seekBendRange = dialogView.findViewById(R.id.seek_bend_range);
         SeekBar seekBendSlew = dialogView.findViewById(R.id.seek_bend_slew);
         SeekBar seekModDepth = dialogView.findViewById(R.id.seek_modulation_depth);
@@ -981,7 +1049,41 @@ public class MainActivity extends AppCompatActivity {
         else if (params.verticalControlParam == 2)
             rgVerticalControl.check(R.id.rb_vertical_lpf);
 
-        Button btnApply = dialogView.findViewById(R.id.btn_apply);
+        // Scale Configuration
+        SwitchMaterial swScaleConfigEnable = dialogView.findViewById(R.id.switch_scale_config_enable);
+        swScaleConfigEnable.setChecked(params.isScaleConfigEnabled);
+
+        View containerScaleOptions = dialogView.findViewById(R.id.container_scale_options);
+        containerScaleOptions.setVisibility(params.isScaleConfigEnabled ? View.VISIBLE : View.GONE);
+        swScaleConfigEnable.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            containerScaleOptions.setVisibility(isChecked ? View.VISIBLE : View.GONE);
+        });
+
+        SwitchMaterial[] swKeys = new SwitchMaterial[12];
+        int[] swKeyIds = {
+            R.id.sw_key_c, R.id.sw_key_cs, R.id.sw_key_d, R.id.sw_key_ds, R.id.sw_key_e, R.id.sw_key_f,
+            R.id.sw_key_fs, R.id.sw_key_g, R.id.sw_key_gs, R.id.sw_key_a, R.id.sw_key_as, R.id.sw_key_b
+        };
+        for (int i = 0; i < 12; i++) {
+            swKeys[i] = dialogView.findViewById(swKeyIds[i]);
+            swKeys[i].setChecked(params.enabledKeys[i]);
+        }
+
+        dialogView.findViewById(R.id.btn_scale_chromatic).setOnClickListener(v -> {
+            for (int i = 0; i < 12; i++) swKeys[i].setChecked(true);
+        });
+        dialogView.findViewById(R.id.btn_scale_pentatonic).setOnClickListener(v -> {
+            // Pentatonic: C, D, E, G, A (0, 2, 4, 7, 9)
+            int[] pentatonic = {0, 2, 4, 7, 9};
+            for (int i = 0; i < 12; i++) swKeys[i].setChecked(false);
+            for (int p : pentatonic) swKeys[p].setChecked(true);
+        });
+        dialogView.findViewById(R.id.btn_scale_whole).setOnClickListener(v -> {
+            // Whole Tone: C, D, E, F#, G#, A# (0, 2, 4, 6, 8, 10)
+            for (int i = 0; i < 12; i++) swKeys[i].setChecked(i % 2 == 0);
+        });
+
+
 
         // Listeners for labels
         seekBendRange.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -1215,6 +1317,13 @@ public class MainActivity extends AppCompatActivity {
             else if (checkedId == R.id.rb_vertical_lpf)
                 params.verticalControlParam = 2;
 
+            params.isScaleConfigEnabled = swScaleConfigEnable.isChecked();
+            for (int i = 0; i < 12; i++) {
+                params.enabledKeys[i] = swKeys[i].isChecked();
+            }
+            int enabledMask = 0;
+            for (int i = 0; i < 12; i++) if (params.enabledKeys[i]) enabledMask |= (1 << i);
+
             NativeAudioEngine.setRecordingMode(params.recordingMode);
             getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                     .putBoolean("global_recording_mode", params.recordingMode)
@@ -1242,12 +1351,17 @@ public class MainActivity extends AppCompatActivity {
                     .putBoolean("perf_octave_enabled", params.isOctaveEnabled)
                     .putFloat("perf_octave_slew", (float) params.octaveSlewRate)
                     .putInt("perf_vertical_control", params.verticalControlParam)
+                    .putBoolean("perf_scale_config_enabled", params.isScaleConfigEnabled)
+                    .putInt("perf_enabled_keys", enabledMask)
                     .apply();
 
+            setupKeyboard();
             updateEffectVisibility();
             syncNativeParams();
             dialog.dismiss();
-            showInterstitialAd();
+            if (!billingManager.isAdsRemoved()) {
+                showInterstitialAd();
+            }
         });
 
         dialog.show();
@@ -1314,9 +1428,14 @@ public class MainActivity extends AppCompatActivity {
             json.put("gain", params.gain);
             json.put("bufferSize", params.bufferSize);
             json.put("recordingMode", params.recordingMode);
-            json.put("filterCutoff", params.filterCutoff);
-            json.put("filterResonance", params.filterResonance);
             json.put("isFilterEnabled", params.isFilterEnabled);
+            json.put("isScaleConfigEnabled", params.isScaleConfigEnabled);
+
+            int mask = 0;
+            for (int i = 0; i < 12; i++) {
+                if (params.enabledKeys[i]) mask |= (1 << i);
+            }
+            json.put("enabledKeys", mask);
 
             SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
             prefs.edit().putString(name, json.toString()).apply();
@@ -1388,9 +1507,13 @@ public class MainActivity extends AppCompatActivity {
                 params.delayWet = json.optDouble("delayWet", 0.0);
                 params.delayTime = json.optDouble("delayTime", 0.5);
                 params.delayFeedback = json.optDouble("delayFeedback", 0.5);
-                params.filterCutoff = json.optDouble("filterCutoff", 1000.0);
-                params.filterResonance = json.optDouble("filterResonance", 1.0);
                 params.isFilterEnabled = json.optBoolean("isFilterEnabled", true);
+                params.isScaleConfigEnabled = json.optBoolean("isScaleConfigEnabled", false);
+
+                int mask = json.optInt("enabledKeys", 0xFFF);
+                for (int i = 0; i < 12; i++) {
+                    params.enabledKeys[i] = ((mask >> i) & 1) == 1;
+                }
 
                 // Update XY Pad positions
                 if (padOscillator != null) {
@@ -1436,6 +1559,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showInterstitialAd() {
+        if (billingManager.isAdsRemoved()) {
+            return;
+        }
         if (mInterstitialAd != null) {
             mInterstitialAd.show(this);
             loadInterstitialAd(); // Load next one

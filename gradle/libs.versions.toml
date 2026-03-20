@@ -9,6 +9,8 @@ activity = "1.12.4"
 constraintlayout = "2.2.1"
 playServicesAds = "23.6.0"
 oboe = "1.9.3"
+billing = "7.0.0"
+
 
 
 
@@ -22,6 +24,8 @@ activity = { group = "androidx.activity", name = "activity", version.ref = "acti
 constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
 play-services-ads = { group = "com.google.android.gms", name = "play-services-ads", version.ref = "playServicesAds" }
 oboe = { group = "com.google.oboe", name = "oboe", version.ref = "oboe" }
+billing = { group = "com.android.billingclient", name = "billing", version.ref = "billing" }
+
 
 
 
