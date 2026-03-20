@@ -347,3 +347,11 @@ void ShepardSynthesizer::setOctaveSlewRate(double slewRate) {
     std::lock_guard<std::mutex> lock(voiceMutex);
     octaveSlewRate = slewRate;
 }
+
+void ShepardSynthesizer::getEnvelopeLevels(float* levels) {
+    std::lock_guard<std::mutex> lock(voiceMutex);
+    for (int i = 0; i < 12; ++i) {
+        // Return the combined amplitude of the envelope and the base volume
+        levels[i] = (float)(voices[i].envelope * voices[i].volume);
+    }
+}

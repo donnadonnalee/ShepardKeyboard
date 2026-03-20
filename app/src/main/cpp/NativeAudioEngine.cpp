@@ -10,30 +10,40 @@ class AudioEngine : public oboe::AudioStreamDataCallback {
 public:
     AudioEngine(bool initialRecordingMode) : recordingMode(initialRecordingMode) {
         synth = std::make_unique<ShepardSynthesizer>();
+        // Pre-allocate scratch buffer for mono synthesis (max expected 2048 frames)
+        scratchBuffer.resize(2048);
     }
 
     void start() {
         oboe::AudioStreamBuilder builder;
-        builder.setPerformanceMode(oboe::PerformanceMode::LowLatency)
-            ->setSharingMode(recordingMode ? oboe::SharingMode::Shared : oboe::SharingMode::Exclusive)
-            ->setFormat(oboe::AudioFormat::Float)
-            ->setChannelCount(oboe::ChannelCount::Mono)
-            ->setDataCallback(this)
-            ->setSampleRate(48000);
-
+        
+        // Force OpenSL ES and Standard Performance Mode for Recording Mode.
+        // This ensures the stream goes through the system mixer and is capturable by screen recorders,
+        // bypassing the "MMAP" path that AAudio uses on Pixel devices.
         if (recordingMode) {
-            builder.setAllowedCapturePolicy(oboe::AllowedCapturePolicy::All)
+            builder.setAudioApi(oboe::AudioApi::OpenSLES)
+                   ->setPerformanceMode(oboe::PerformanceMode::None)
+                   ->setSharingMode(oboe::SharingMode::Shared)
                    ->setUsage(oboe::Usage::Media)
                    ->setContentType(oboe::ContentType::Music);
+        } else {
+            builder.setAudioApi(oboe::AudioApi::AAudio) // Prefer AAudio for performance
+                   ->setPerformanceMode(oboe::PerformanceMode::LowLatency)
+                   ->setSharingMode(oboe::SharingMode::Exclusive);
         }
+
+        builder.setFormat(oboe::AudioFormat::Float)
+            ->setChannelCount(oboe::ChannelCount::Stereo) // Always Stereo for consistency
+            ->setDataCallback(this)
+            ->setSampleRate(48000)
+            ->setAllowedCapturePolicy(oboe::AllowedCapturePolicy::All);
 
         builder.openStream(stream);
         
         if (stream) {
-            __android_log_print(ANDROID_LOG_INFO, TAG, "Stream opened: Mode=%s, Policy=%d, Usage=%d",
-                               recordingMode ? "Shared (Recording)" : "Exclusive",
-                               (int)stream->getAllowedCapturePolicy(),
-                               (int)stream->getUsage());
+            __android_log_print(ANDROID_LOG_INFO, TAG, "Stream opened: API=%s, Mode=%s, Channels=Stereo",
+                               (stream->getAudioApi() == oboe::AudioApi::AAudio ? "AAudio" : "OpenSL"),
+                               (stream->getSharingMode() == oboe::SharingMode::Shared ? "Shared" : "Exclusive"));
             stream->requestStart();
         }
     }
@@ -48,7 +58,21 @@ public:
 
     oboe::DataCallbackResult onAudioReady(oboe::AudioStream *audioStream, void *audioData, int32_t numFrames) override {
         float *output = static_cast<float *>(audioData);
-        synth->process(output, numFrames);
+
+        if (numFrames > scratchBuffer.size()) {
+            scratchBuffer.resize(numFrames); // Audio thread resize - slightly risky but only happens if buffer size increases
+        }
+
+        // 1. Process mono signal into scratch buffer
+        synth->process(scratchBuffer.data(), numFrames);
+
+        // 2. Distribute mono signal to Stereo output (L and R)
+        for (int i = 0; i < numFrames; ++i) {
+            float sample = scratchBuffer[i];
+            output[i * 2] = sample;     // Left
+            output[i * 2 + 1] = sample; // Right
+        }
+
         return oboe::DataCallbackResult::Continue;
     }
 
@@ -79,10 +103,14 @@ public:
             stream->setBufferSizeInFrames(frames);
         }
     }
+    void getEnvelopeLevels(float* levels) {
+        if (synth) synth->getEnvelopeLevels(levels);
+    }
 
 private:
     std::shared_ptr<oboe::AudioStream> stream;
     std::unique_ptr<ShepardSynthesizer> synth;
+    std::vector<float> scratchBuffer;
     bool recordingMode = false;
 };
 
@@ -190,6 +218,15 @@ Java_jp_example_shepardkeyboard_NativeAudioEngine_setOctaveSlewRate(JNIEnv *env,
 JNIEXPORT void JNICALL
 Java_jp_example_shepardkeyboard_NativeAudioEngine_setBufferSize(JNIEnv *env, jclass clazz, jint frames) {
     if (engine) engine->setBufferSize(frames);
+}
+
+JNIEXPORT void JNICALL
+Java_jp_example_shepardkeyboard_NativeAudioEngine_getEnvelopeLevels(JNIEnv *env, jclass clazz, jfloatArray levels) {
+    if (engine) {
+        jfloat *cLevels = env->GetFloatArrayElements(levels, nullptr);
+        engine->getEnvelopeLevels(cLevels);
+        env->ReleaseFloatArrayElements(levels, cLevels, 0);
+    }
 }
 
 }

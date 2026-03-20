@@ -35,6 +35,9 @@ public:
     // Updated noteOn to support slides
     void noteOn(int noteIndex, float volume, bool slideFromOld = false, int oldNoteIndex = -1);
 
+    // Get current amplitude (envelope * volume) for all 12 notes for visualization
+    void getEnvelopeLevels(float* levels);
+
 private:
     struct Voice {
         bool active = false;

@@ -24,4 +24,5 @@ public class NativeAudioEngine {
     public static native void setBufferSize(int frames);
     public static native void setOctaveOffset(float offset);
     public static native void setOctaveSlewRate(float slewRate);
+    public static native void getEnvelopeLevels(float[] levels);
 }

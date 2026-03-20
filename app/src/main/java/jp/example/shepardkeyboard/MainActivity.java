@@ -81,6 +81,16 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvAudioName, tvAudioTime;
     private SeekBar seekAudioPosition;
     private final Handler audioHandler = new Handler(Looper.getMainLooper());
+    private final Handler visualUpdateHandler = new Handler(Looper.getMainLooper());
+    private final float[] envelopeLevels = new float[12];
+    private final Runnable visualUpdater = new Runnable() {
+        @Override
+        public void run() {
+            NativeAudioEngine.getEnvelopeLevels(envelopeLevels);
+            updateKeyVisuals(viewToNote, envelopeLevels);
+            visualUpdateHandler.postDelayed(this, 16); // ~60fps
+        }
+    };
     private final Runnable audioUpdater = new Runnable() {
         @Override
         public void run() {
@@ -148,6 +158,8 @@ public class MainActivity extends AppCompatActivity {
         setupRealTimeControls();
         setupKeyboard();
         setupAudioPlayerUI();
+
+        visualUpdateHandler.post(visualUpdater);
 
         envelopeView.setOnEnvelopeChangeListener((attack, decay, sustainL, release) -> {
             params.attackSec = attack;
@@ -770,7 +782,6 @@ public class MainActivity extends AppCompatActivity {
                 case MotionEvent.ACTION_POINTER_UP:
                 case MotionEvent.ACTION_CANCEL:
                     stopTouch(pointerId);
-                    updateKeyVisuals(viewToNote, activePointers.values());
                     break;
             }
             return true;
@@ -848,7 +859,6 @@ public class MainActivity extends AppCompatActivity {
                     NativeAudioEngine.setNoteOn(transposedNote, volume);
                 }
                 activePointers.put(pointerId, transposedNote);
-                updateKeyVisuals(viewToNote, activePointers.values());
             } else {
                 // Just update volume if changed significantly to avoid jitter
                 // and redundant engine calls.
@@ -859,7 +869,6 @@ public class MainActivity extends AppCompatActivity {
         } else {
             if (lastNote != null) {
                 stopTouch(pointerId);
-                updateKeyVisuals(viewToNote, activePointers.values());
             }
         }
     }
@@ -871,16 +880,24 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void updateKeyVisuals(Map<View, Integer> viewToNote, Collection<Integer> currentlyPlaying) {
+    private void updateKeyVisuals(Map<View, Integer> viewToNote, float[] levels) {
+        int themeOrange = Color.rgb(255, 204, 0);
         for (Map.Entry<View, Integer> entry : viewToNote.entrySet()) {
             View v = entry.getKey();
-            int note = (entry.getValue() + transposeOffset + 12) % 12;
-            boolean isBlack = getResources().getResourceEntryName(v.getId()).endsWith("s");
+            // Map physical key index to transposed note index used in the engine
+            int levelIndex = (entry.getValue() + transposeOffset + 12) % 12;
+            float level = levels[levelIndex];
 
             Drawable bg = v.getBackground();
             if (bg != null) {
-                if (currentlyPlaying.contains(note)) {
-                    bg.setColorFilter(Color.GRAY, PorterDuff.Mode.MULTIPLY);
+                if (level > 0.001f) {
+                    // Level is 0.0 to 1.0. Map to 0-255 Alpha.
+                    int alpha = (int) (Math.min(1.0f, level) * 255);
+                    int tintColor = Color.argb(alpha, Color.red(themeOrange), 
+                                               Color.green(themeOrange), Color.blue(themeOrange));
+                    // SRC_ATOP layers the color on top with its alpha, 
+                    // blending correctly with white or black backgrounds.
+                    bg.setColorFilter(tintColor, PorterDuff.Mode.SRC_ATOP);
                 } else {
                     bg.clearColorFilter();
                 }
@@ -943,6 +960,18 @@ public class MainActivity extends AppCompatActivity {
 
         Switch swRecording = dialogView.findViewById(R.id.switch_recording_mode);
         swRecording.setChecked(params.recordingMode);
+        swRecording.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                    if (isChecked) {
+                        new AlertDialog.Builder(this)
+                                .setTitle("Recording Mode")
+                                .setMessage("Enable Recording Mode?\nThis improves recording reliability but may slightly increase audio latency during performance.")
+                                .setPositiveButton("Enable", null)
+                                .setNegativeButton("Cancel", (dialog, which) -> {
+                                    swRecording.setChecked(false);
+                                })
+                                .show();
+                    }
+        });
 
         RadioGroup rgVerticalControl = dialogView.findViewById(R.id.rg_vertical_control);
         if (params.verticalControlParam == 0)
@@ -1430,11 +1459,12 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        visualUpdateHandler.removeCallbacks(visualUpdater);
+        audioHandler.removeCallbacks(audioUpdater);
         if (mediaPlayer != null) {
             mediaPlayer.release();
             mediaPlayer = null;
         }
-        audioHandler.removeCallbacks(audioUpdater);
         NativeAudioEngine.delete();
     }
 
