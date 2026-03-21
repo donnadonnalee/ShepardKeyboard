@@ -5,8 +5,9 @@ public class NativeAudioEngine {
         System.loadLibrary("shepard_engine");
     }
 
-    public static native void create(boolean recordingMode);
+    public static native void create(boolean recordingMode, int sampleRate);
     public static native void delete();
+    public static native void setSampleRate(int sampleRate);
     public static native void setNoteOn(int noteIndex, float volume);
     public static native void setNoteOnGlide(int noteIndex, float volume, int oldNoteIndex);
     public static native void setNoteOff(int noteIndex);

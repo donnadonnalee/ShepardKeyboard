@@ -23,6 +23,7 @@ public class ShepardGenerator {
         public double sigma = 1.0;
         public double gain = 0.8;
         public int bufferSize = 256;
+        public int sampleRate = 44100;
         public double modulationDepth = 0.0; // semitones
         public double modulationRate = 5.0;  // Hz
         public boolean fixedDuration = false;
@@ -57,13 +58,13 @@ public class ShepardGenerator {
         double release = params.releaseSec;
         double totalTime = attack + sustain + release;
 
-        int numSamples = (int) (SAMPLE_RATE * totalTime);
+        int numSamples = (int) (params.sampleRate * totalTime);
         short[] pcm = new short[numSamples];
 
         double maxAmplitude = 0;
 
         for (int i = 0; i < numSamples; i++) {
-            double t = (double) i / SAMPLE_RATE;
+            double t = (double) i / params.sampleRate;
             double sample = 0;
 
             if (listener != null && i % 1000 == 0) {

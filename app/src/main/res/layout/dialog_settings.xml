@@ -49,6 +49,23 @@
                     android:layout_height="wrap_content"
                     android:text="Recording Optimization Mode"
                     android:layout_marginTop="8dp" />
+                <TextView
+                    android:id="@+id/label_sample_rate"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Sample Rate (Hz)"
+                    android:layout_marginTop="8dp" />
+                <RadioGroup
+                    android:id="@+id/rg_sample_rate"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="4dp">
+                    <RadioButton android:id="@+id/rb_sr_8000" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="8k" android:textSize="10sp" />
+                    <RadioButton android:id="@+id/rb_sr_24000" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="24k" android:textSize="10sp" />
+                    <RadioButton android:id="@+id/rb_sr_44100" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="44.1k" android:textSize="10sp" />
+                    <RadioButton android:id="@+id/rb_sr_48000" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="48k" android:textSize="10sp" />
+                </RadioGroup>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

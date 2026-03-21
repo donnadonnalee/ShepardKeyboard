@@ -31,6 +31,8 @@ public:
     void setEffectsEnabled(bool pitch, bool mod, bool drive, bool delay, bool filter);
     void setOctaveOffset(float offset);
     void setOctaveSlewRate(double slewRate);
+    void setSampleRate(double rate);
+    double getSampleRate() const { return sampleRate; }
     
     // Updated noteOn to support slides
     void noteOn(int noteIndex, float volume, bool slideFromOld = false, int oldNoteIndex = -1);
@@ -96,14 +98,29 @@ private:
     bool delayEnabled = true;
     bool filterEnabled = true;
 
-    // Filter parameters & state (State Variable Filter)
+    // Filter parameters & state (State Variable Filter - Optimized)
     double filterCutoff = 20000.0;
     double filterResonance = 0.707;
     double currentFilterCutoff = 20000.0;
     double currentFilterResonance = 0.707;
     double z1 = 0.0;
     double z2 = 0.0;
-    static constexpr double kSampleRate = 48000.0;
+    
+    // Pre-calculated filter coefficients
+    double coeff_g = 0.0;
+    double coeff_k = 0.0;
+    double coeff_a1 = 0.0;
+    double coeff_a2 = 0.0;
+    double coeff_a3 = 0.0;
+    void updateFilterCoefficients();
+
+    // Limiter state
+    float limiterGain = 1.0f;
+    static constexpr float kLimiterThresh = 0.95f;
+    static constexpr float kLimiterAttack = 0.01f; // 1-exp(-1/(0.001*fs)) approx
+    static constexpr float kLimiterRelease = 0.0001f;
+
+    double sampleRate = 48000.0;
     static constexpr double kTwoPi = 6.283185307179586;
 };
 

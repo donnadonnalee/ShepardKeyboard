@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#121212">
+
+    <!-- Performance Sliders Sidebar (Left) -->
+    <LinearLayout
+        android:id="@+id/circular_perf_sidebar"
+        android:layout_width="wrap_content"
+        android:layout_height="0dp"
+        android:orientation="horizontal"
+        android:background="#1A1A1A"
+        android:padding="4dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <!-- Octave Jump -->
+        <LinearLayout
+            android:layout_width="45dp"
+            android:layout_height="match_parent"
+            android:gravity="center_horizontal"
+            android:orientation="vertical">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="OCT" android:textColor="#666666" android:textSize="7sp"/>
+            <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+                <SeekBar
+                    android:id="@+id/seek_circular_octave"
+                    android:layout_width="140dp"
+                    android:layout_height="30dp"
+                    android:max="2"
+                    android:progress="1"
+                    android:layout_gravity="center"
+                    android:rotation="-90" />
+            </FrameLayout>
+        </LinearLayout>
+
+        <!-- Pitch Bend -->
+        <LinearLayout
+            android:layout_width="45dp"
+            android:layout_height="match_parent"
+            android:gravity="center_horizontal"
+            android:orientation="vertical">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="PITCH" android:textColor="#666666" android:textSize="7sp"/>
+            <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+                <SeekBar
+                    android:id="@+id/seek_circular_pitch"
+                    android:layout_width="140dp"
+                    android:layout_height="30dp"
+                    android:max="200"
+                    android:progress="100"
+                    android:layout_gravity="center"
+                    android:rotation="-90" />
+            </FrameLayout>
+        </LinearLayout>
+
+        <!-- Modulation -->
+        <LinearLayout
+            android:layout_width="45dp"
+            android:layout_height="match_parent"
+            android:gravity="center_horizontal"
+            android:orientation="vertical">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="MOD" android:textColor="#666666" android:textSize="7sp"/>
+            <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+                <SeekBar
+                    android:id="@+id/seek_circular_mod"
+                    android:layout_width="140dp"
+                    android:layout_height="30dp"
+                    android:max="100"
+                    android:progress="0"
+                    android:layout_gravity="center"
+                    android:rotation="-90" />
+            </FrameLayout>
+        </LinearLayout>
+
+        <!-- Drive -->
+        <LinearLayout
+            android:layout_width="45dp"
+            android:layout_height="match_parent"
+            android:gravity="center_horizontal"
+            android:orientation="vertical">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="DRIVE" android:textColor="#FFCC00" android:textSize="7sp"/>
+            <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+                <SeekBar
+                    android:id="@+id/seek_circular_drive"
+                    android:layout_width="140dp"
+                    android:layout_height="30dp"
+                    android:max="100"
+                    android:progress="0"
+                    android:layout_gravity="center"
+                    android:rotation="-90"
+                    android:progressTint="#FFCC00"
+                    android:thumbTint="#FFCC00" />
+            </FrameLayout>
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- Circular Keyboard (Right - Maximized) -->
+    <jp.example.shepardkeyboard.CircularKeyboardView
+        android:id="@+id/circular_keyboard_view"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintStart_toEndOf="@id/circular_perf_sidebar"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
+    <!-- Close Button (Top right of the keyboard area) -->
+    <ImageButton
+        android:id="@+id/btn_close_circular"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:src="@android:drawable/ic_menu_close_clear_cancel"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:tint="#888888"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_margin="8dp" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

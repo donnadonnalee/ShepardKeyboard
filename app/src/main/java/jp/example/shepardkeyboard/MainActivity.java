@@ -77,6 +77,8 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvCenterFreq, tvSigma, tvDriveValue, tvFilterCutoff, tvFilterResonance;
     private final Map<Integer, Integer> activePointers = new HashMap<>();
     private final Map<View, Integer> viewToNote = new HashMap<>();
+    private CircularKeyboardView circularKeyboardView;
+    private ImageButton ibCircularMode;
 
     // Audio Player
     private MediaPlayer mediaPlayer;
@@ -92,6 +94,9 @@ public class MainActivity extends AppCompatActivity {
         public void run() {
             NativeAudioEngine.getEnvelopeLevels(envelopeLevels);
             updateKeyVisuals(viewToNote, envelopeLevels);
+            if (circularKeyboardView != null && circularKeyboardView.isShown()) {
+                circularKeyboardView.setEnvelopeLevels(envelopeLevels);
+            }
             visualUpdateHandler.postDelayed(this, 16); // ~60fps
         }
     };
@@ -154,8 +159,9 @@ public class MainActivity extends AppCompatActivity {
         for (int i = 0; i < 12; i++) {
             params.enabledKeys[i] = ((enabledKeysMask >> i) & 1) == 1;
         }
+        params.sampleRate = globalPrefs.getInt("global_sample_rate", 44100);
 
-        NativeAudioEngine.create(params.recordingMode);
+        NativeAudioEngine.create(params.recordingMode, params.sampleRate);
         NativeAudioEngine.setFixedDurationMode(params.fixedDuration);
         NativeAudioEngine.setBufferSize(params.bufferSize);
 
@@ -198,6 +204,10 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.ib_settings).setOnClickListener(v -> showSettingsDialog());
         findViewById(R.id.ib_save).setOnClickListener(v -> showSavePresetDialog());
         findViewById(R.id.ib_load).setOnClickListener(v -> showLoadPresetDialog());
+        ibCircularMode = findViewById(R.id.ib_circular_mode);
+        if (ibCircularMode != null) {
+            ibCircularMode.setOnClickListener(v -> showCircularModeDialog());
+        }
 
         findViewById(R.id.btn_main_share).setOnClickListener(v -> shareApp());
         findViewById(R.id.btn_main_ads).setOnClickListener(v -> showInterstitialAd());
@@ -816,6 +826,17 @@ public class MainActivity extends AppCompatActivity {
             switch (actionMasked) {
                 case MotionEvent.ACTION_DOWN:
                 case MotionEvent.ACTION_POINTER_DOWN:
+                    float xDown = event.getX(pointerIndex);
+                    float yDown = event.getY(pointerIndex);
+                    
+                    // Determine which note should be highest for vertical controls
+                    float minYDown = Float.MAX_VALUE;
+                    for (int i = 0; i < event.getPointerCount(); i++) {
+                        float y = event.getY(i);
+                        if (y < minYDown) minYDown = y;
+                    }
+                    
+                    handleTouch(v, pointerId, xDown, yDown, blackKeys, whiteKeys, viewToNote, yDown == minYDown);
                     break;
                 case MotionEvent.ACTION_MOVE:
                     float minY = Float.MAX_VALUE;
@@ -1040,6 +1061,12 @@ public class MainActivity extends AppCompatActivity {
                                 .show();
                     }
         });
+
+        RadioGroup rgSampleRate = dialogView.findViewById(R.id.rg_sample_rate);
+        if (params.sampleRate == 8000) rgSampleRate.check(R.id.rb_sr_8000);
+        else if (params.sampleRate == 24000) rgSampleRate.check(R.id.rb_sr_24000);
+        else if (params.sampleRate == 44100) rgSampleRate.check(R.id.rb_sr_44100);
+        else if (params.sampleRate == 48000) rgSampleRate.check(R.id.rb_sr_48000);
 
         RadioGroup rgVerticalControl = dialogView.findViewById(R.id.rg_vertical_control);
         if (params.verticalControlParam == 0)
@@ -1309,6 +1336,18 @@ public class MainActivity extends AppCompatActivity {
             params.octaveSlewRate = seekOctaveSlew.getProgress() / 100.0;
             params.recordingMode = swRecording.isChecked();
 
+            int srId = rgSampleRate.getCheckedRadioButtonId();
+            int newSampleRate = params.sampleRate;
+            if (srId == R.id.rb_sr_8000) newSampleRate = 8000;
+            else if (srId == R.id.rb_sr_24000) newSampleRate = 24000;
+            else if (srId == R.id.rb_sr_44100) newSampleRate = 44100;
+            else if (srId == R.id.rb_sr_48000) newSampleRate = 48000;
+
+            if (newSampleRate != params.sampleRate) {
+                params.sampleRate = newSampleRate;
+                NativeAudioEngine.setSampleRate(params.sampleRate);
+            }
+
             int checkedId = rgVerticalControl.getCheckedRadioButtonId();
             if (checkedId == R.id.rb_vertical_volume)
                 params.verticalControlParam = 0;
@@ -1353,6 +1392,7 @@ public class MainActivity extends AppCompatActivity {
                     .putInt("perf_vertical_control", params.verticalControlParam)
                     .putBoolean("perf_scale_config_enabled", params.isScaleConfigEnabled)
                     .putInt("perf_enabled_keys", enabledMask)
+                    .putInt("global_sample_rate", params.sampleRate)
                     .apply();
 
             setupKeyboard();
@@ -1580,6 +1620,108 @@ public class MainActivity extends AppCompatActivity {
 
         Intent shareIntent = Intent.createChooser(sendIntent, null);
         startActivity(shareIntent);
+    }
+
+    private void showCircularModeDialog() {
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.layout_circular_mode, null);
+        circularKeyboardView = dialogView.findViewById(R.id.circular_keyboard_view);
+        circularKeyboardView.setEnabledKeys(params.enabledKeys);
+        circularKeyboardView.setTransposeOffset(transposeOffset);
+
+        AlertDialog dialog = new AlertDialog.Builder(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
+                .setView(dialogView)
+                .create();
+
+        setupCircularSeekBars(dialogView);
+        dialogView.findViewById(R.id.btn_close_circular).setOnClickListener(v -> dialog.dismiss());
+
+        circularKeyboardView.setOnCircularTouchListener(new CircularKeyboardView.OnCircularTouchListener() {
+            @Override
+            public void onNoteOn(int noteIndex, int oldNoteIndex, float x, float y, float normDist) {
+                handleCircularTouch(noteIndex, oldNoteIndex, normDist, true);
+            }
+
+            @Override
+            public void onNoteMove(int noteIndex, float x, float y, float normDist) {
+                handleCircularTouch(noteIndex, -1, normDist, false);
+            }
+
+            @Override
+            public void onNoteOff(int noteIndex) {
+                int transposedNote = (noteIndex + transposeOffset + 12) % 12;
+                NativeAudioEngine.setNoteOff(transposedNote);
+            }
+        });
+
+        dialog.show();
+    }
+
+    private void setupCircularSeekBars(View v) {
+        SeekBar sOct = v.findViewById(R.id.seek_circular_octave);
+        SeekBar sPitch = v.findViewById(R.id.seek_circular_pitch);
+        SeekBar sMod = v.findViewById(R.id.seek_circular_mod);
+        SeekBar sDrive = v.findViewById(R.id.seek_circular_drive);
+
+        sOct.setProgress(seekOctaveJump.getProgress());
+        sPitch.setProgress(seekPitchBend.getProgress());
+        sMod.setProgress(seekModulation.getProgress());
+        sDrive.setProgress(seekDrive.getProgress());
+
+        sOct.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) { if (fromUser) seekOctaveJump.setProgress(progress); }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) { seekBar.setProgress(1); seekOctaveJump.setProgress(1); }
+        });
+
+        sPitch.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) { if (fromUser) seekPitchBend.setProgress(progress); }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) { seekBar.setProgress(100); seekPitchBend.setProgress(100); }
+        });
+
+        sMod.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) { if (fromUser) seekModulation.setProgress(progress); }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+
+        sDrive.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) { if (fromUser) seekDrive.setProgress(progress); }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+    }
+
+    private void handleCircularTouch(int noteIndex, int oldNoteIndex, float normDist, boolean isNew) {
+        int transposedNote = (noteIndex + transposeOffset + 12) % 12;
+        int transposedOldNote = (oldNoteIndex != -1) ? (oldNoteIndex + transposeOffset + 12) % 12 : -1;
+        
+        float volume = 1.0f;
+        if (params.verticalControlParam == 0) {
+            // Center is quiet, outer is loud
+            volume = 0.01f + 0.99f * normDist;
+        } else if (params.verticalControlParam == 1) {
+            double scaledDepth = normDist * params.modulationDepth;
+            NativeAudioEngine.setModulation(scaledDepth, params.modulationRate);
+        } else if (params.verticalControlParam == 2) {
+            double cutoff = 100.0 * Math.pow(150.0, normDist);
+            NativeAudioEngine.setFilter(cutoff, params.filterResonance);
+        }
+
+        if (isNew) {
+            if (transposedOldNote != -1 && params.isGlideEnabled) {
+                NativeAudioEngine.setNoteOnGlide(transposedNote, volume, transposedOldNote);
+            } else {
+                if (transposedOldNote != -1) {
+                    NativeAudioEngine.setNoteOff(transposedOldNote);
+                }
+                NativeAudioEngine.setNoteOn(transposedNote, volume);
+            }
+        } else {
+            if (params.verticalControlParam == 0) {
+                NativeAudioEngine.setNoteOn(transposedNote, volume);
+            }
+        }
     }
 
     @Override

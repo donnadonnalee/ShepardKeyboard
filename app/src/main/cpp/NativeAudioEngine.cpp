@@ -8,13 +8,16 @@
 
 class AudioEngine : public oboe::AudioStreamDataCallback {
 public:
-    AudioEngine(bool initialRecordingMode) : recordingMode(initialRecordingMode) {
+    AudioEngine(bool initialRecordingMode, int sampleRate) : recordingMode(initialRecordingMode) {
         synth = std::make_unique<ShepardSynthesizer>();
+        synth->setSampleRate((double)sampleRate);
         // Pre-allocate scratch buffer for mono synthesis (max expected 2048 frames)
         scratchBuffer.resize(2048);
     }
 
-    void start() {
+    void start(int sampleRate = -1) {
+        if (sampleRate > 0) synth->setSampleRate((double)sampleRate);
+
         oboe::AudioStreamBuilder builder;
         
         // Force OpenSL ES and Standard Performance Mode for Recording Mode.
@@ -22,7 +25,7 @@ public:
         // bypassing the "MMAP" path that AAudio uses on Pixel devices.
         if (recordingMode) {
             builder.setAudioApi(oboe::AudioApi::OpenSLES)
-                   ->setPerformanceMode(oboe::PerformanceMode::None)
+                   ->setPerformanceMode(oboe::PerformanceMode::LowLatency)
                    ->setSharingMode(oboe::SharingMode::Shared)
                    ->setUsage(oboe::Usage::Media)
                    ->setContentType(oboe::ContentType::Music);
@@ -35,7 +38,7 @@ public:
         builder.setFormat(oboe::AudioFormat::Float)
             ->setChannelCount(oboe::ChannelCount::Stereo) // Always Stereo for consistency
             ->setDataCallback(this)
-            ->setSampleRate(48000)
+            ->setSampleRate((int32_t)synth->getSampleRate()) // Use current synth sample rate
             ->setAllowedCapturePolicy(oboe::AllowedCapturePolicy::All);
 
         builder.openStream(stream);
@@ -119,10 +122,19 @@ static AudioEngine* engine = nullptr;
 extern "C" {
 
 JNIEXPORT void JNICALL
-Java_jp_example_shepardkeyboard_NativeAudioEngine_create(JNIEnv *env, jclass clazz, jboolean recording_mode) {
+Java_jp_example_shepardkeyboard_NativeAudioEngine_create(JNIEnv *env, jclass clazz, jboolean recording_mode, jint sample_rate) {
     if (engine == nullptr) {
-        engine = new AudioEngine(recording_mode);
+        engine = new AudioEngine(recording_mode, sample_rate);
         engine->start();
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_jp_example_shepardkeyboard_NativeAudioEngine_setSampleRate(JNIEnv *env, jclass clazz, jint sample_rate) {
+    if (engine) {
+        // Sample rate change requires restarting the stream
+        engine->stop();
+        engine->start(sample_rate);
     }
 }
 

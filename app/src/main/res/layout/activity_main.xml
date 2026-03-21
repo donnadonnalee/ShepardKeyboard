@@ -146,6 +146,15 @@
                 android:padding="8dp"
                 android:scaleType="fitCenter" />
             <ImageButton
+                android:id="@+id/ib_circular_mode"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:src="@drawable/ic_circular"
+                android:tint="#888888"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:padding="8dp"
+                android:scaleType="fitCenter" />
+            <ImageButton
                 android:id="@+id/ib_settings"
                 android:layout_width="36dp"
                 android:layout_height="36dp"
